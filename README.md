@@ -6,7 +6,7 @@
 
 ![version](https://img.shields.io/badge/version-1.1.2-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-108%20passing-brightgreen?style=flat-square)
+![tests](https://img.shields.io/badge/tests-109%20passing-brightgreen?style=flat-square)
 ![dsh](https://img.shields.io/badge/DSH-0.2.1--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 
@@ -72,7 +72,8 @@ DSH 输入框上原本只有一枚很小的模型按钮。本插件用 `priority
 - **Fast 开关**（⚡）：仅视觉效果，**不改变**实际速度或用量；悬停显示两行说明卡片
   （`1.5 倍速` / `用量更多`，「仅视觉效果」保留给读屏器）。**开关按会话记住** ——
   切换对话再切回来仍然是开，收起态也会带一颗 ⚡
-- **重置**按钮：恢复模型默认档位（同时关闭 Fast）
+- **重置**按钮：恢复模型默认档位（同时关闭 Fast）。provider 没公布默认值时落在**中间档**，
+  所以每个 provider 组都真的会动
 
 #### Fast 开关的开 / 关对比
 

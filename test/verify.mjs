@@ -497,6 +497,31 @@ check('the tooltip keeps the reference card shape and the disclosure stays reach
   assert.match(src, /'aria-describedby': 'cmes-fast-tip'/, 'button points at the tooltip');
 });
 
+/* ── "reset to default" must work beyond the DeepSeek group ─────────────── */
+
+check('FIX: reset works for providers that declare no default effort', () => {
+  // `defaultEffort` is OPTIONAL in the host catalog: the session controller
+  // only emits the key when the provider resolves one
+  // (`...(resolved.reasoning.defaultEffort === undefined ? {} : …)`), and the
+  // Trae adapter forwards it only when the UPSTREAM model advertises
+  // `default_reasoning_effort`. So `reasoning.efforts` can exist without a
+  // default. The reset button used to call chooseEffort(defaultEffort)
+  // unconditionally, and chooseEffort rejects an id that is not a declared
+  // stop — a silent no-op for exactly those groups.
+  assert.match(src, /function defaultStopId\(\)/, 'one definition of "default"');
+  assert.match(src, /const declared = model\?\.reasoning\?\.defaultEffort;/, 'reads the declared default');
+  assert.match(src, /if \(declared !== undefined && efforts\.some\(e => e\.id === declared\)\) return declared;/,
+    'the declared default wins when it is a real stop');
+  assert.match(src, /return efforts\[Math\.floor\(efforts\.length \/ 2\)\]\.id;/,
+    'otherwise the middle stop — the same rule chooseModel uses');
+  assert.match(src, /function resetToDefault\(\)/, 'reset helper');
+  assert.match(src, /onClick: resetToDefault/, 'the button uses the helper');
+  // the inert unconditional call must be gone
+  assert.doesNotMatch(src, /chooseEffort\(model\?\.reasoning\?\.defaultEffort\)/, 'no inert reset call');
+  // and the button must be disabled only when there is nothing to reset to
+  assert.match(src, /disabled: busy \|\| efforts\.length === 0/, 'honest disabled state');
+});
+
 /* ── the Fast toggle must survive a conversation switch ─────────────────── */
 
 check('NEW: the Fast toggle is remembered per conversation', () => {

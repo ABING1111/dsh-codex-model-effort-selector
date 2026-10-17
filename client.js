@@ -921,6 +921,42 @@ body[data-ds-dark-theme] .${P}-root{
         else { previewRef.current = null; setPreview(null); }
       }
 
+      /* What "重置为默认" should land on.
+       *
+       * `defaultEffort` is OPTIONAL in the host's catalog projection: the
+       * session controller only emits it when the provider resolves one
+       * (`...(resolved.reasoning.defaultEffort === undefined ? {} : …)`), and
+       * the Trae adapter only forwards it when the UPSTREAM model advertises
+       * `default_reasoning_effort` — most models advertise their level list but
+       * no default. So `model.reasoning` can exist with `efforts` but WITHOUT
+       * `defaultEffort`.
+       *
+       * The reset button used to call `chooseEffort(defaultEffort)`
+       * unconditionally, and `chooseEffort` refuses an id that is not a
+       * declared stop — so with no default the click was a silent no-op that
+       * read as "重置默认只有 DeepSeek 那个组好用，其他组点了没反应".
+       *
+       * One definition of "default" for the whole plugin: the provider's
+       * declared default when it is a real declared stop, otherwise the middle
+       * stop — the same rule `chooseModel` already applies when landing on a
+       * model with no history. That also covers a provider whose declared
+       * default is not among the stops it advertises.
+       */
+      function defaultStopId() {
+        if (!efforts.length) return undefined;
+        const declared = model?.reasoning?.defaultEffort;
+        if (declared !== undefined && efforts.some(e => e.id === declared)) return declared;
+        return efforts[Math.floor(efforts.length / 2)].id;
+      }
+
+      function resetToDefault() {
+        if (disabled) return;
+        setFast(false);
+        const id = defaultStopId();
+        if (id === undefined) return;      // nothing to reset to (no levels)
+        chooseEffort(id);
+      }
+
       function chooseModel(providerId, nextModel) {
         if (disabled || busyRef.current) return;
         const same = selection?.provider === providerId && selection?.model === nextModel.id;
@@ -1430,9 +1466,12 @@ body[data-ds-dark-theme] .${P}-root{
 
         h('button', {
           className: `${P}-tool ${P}-reset`,
-          disabled: busy || !model?.reasoning,
+          /* disabled only when there is genuinely nothing to reset to: the old
+           * `!model?.reasoning` test left the button enabled-but-inert for the
+           * common "efforts but no declared default" provider */
+          disabled: busy || efforts.length === 0,
           'aria-label': t('reset'), title: t('reset'),
-          onClick: () => { setFast(false); chooseEffort(model?.reasoning?.defaultEffort); }
+          onClick: resetToDefault
         }, icon('reset')),
 
         efforts.length

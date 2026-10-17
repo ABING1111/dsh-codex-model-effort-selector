@@ -22,6 +22,19 @@
   - 行为边界：全新会话仍从**关闭**开始（这是按会话的记忆，不是全局偏好）。
   浏览器实测（真实组件、真实重挂载）：A 打开 Fast → 切到 B（关闭）→ 切回 A（**打开**，
   收起态也带 ⚡）；全新会话 C 为关闭；模拟 `localStorage.setItem` 抛错后，同一次运行内重挂载仍是打开。
+- **「重置为默认」只在 DeepSeek 组有效，其他组点了没反应**。`defaultEffort` 在宿主目录投影里是
+  **可选**的：会话控制器只在该 provider 解析出默认值时才带上这个键
+  （`...(resolved.reasoning.defaultEffort === undefined ? {} : …)`），而 Trae 适配器仅在上游模型
+  自身声明 `default_reasoning_effort` 时转出它 —— 多数模型只公布档位列表、不公布默认值。
+  重置按钮却无条件调用 `chooseEffort(model.reasoning.defaultEffort)`，而 `chooseEffort` 会拒绝
+  **不在档位列表里的 id**（`undefined` 自然也不在），于是点击**静默无效**；同时按钮的禁用条件
+  是 `!model.reasoning`，所以它看起来还是可点的。
+  现在给「默认」一个统一含义（`defaultStopId()`）：provider **声明了**默认值且该值确实是已公布的档位时用它，
+  否则落到**中间档**（`floor(n/2)`，也就是切模型时插件本来就用的规则）—— 顺带覆盖了
+  「provider 声明了默认值但不在档位列表里」这种错配。按钮的禁用条件也改成
+  `efforts.length === 0`，没档位可重置时才是禁用态。
+  浏览器实测（真实组件）：有默认值的模型（默认 `高`）从 `中` 重置回 **高**；无默认值的 3 档模型
+  从 `极高` 重置到**中间档 `高`** 并真的提交了 `reasoningEffort`（修复前是完全不动）。
 
 ## [1.1.1] — 2026-10-17
 
