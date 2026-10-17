@@ -121,9 +121,11 @@ real speed or usage.
 
 ### Dark mode
 
-![Dark mode: light and dark side by side](docs/images/dark-mode.png)
+![Dark mode showcase](docs/images/dark-mode.png)
 
-Light on the left, dark on the right — the same component rendered from the same CSS. In the
+The whole image is a headless render of the **same real CSS** in the dark theme: the popover
+floating above the composer with the collapsed seats, then eight cards — the seven levels live
+(each recolouring its fill, track and heading ink together) plus the Ultra warning state. In the
 dark theme **the entire palette is re-solved against the shipped dark surfaces**:
 
 - **Theme detection reads the official signal**: the `data-ds-dark-theme` attribute on `<body>`

@@ -335,7 +335,7 @@ CSS 静态外观由 `body[data-ds-dark-theme] .cmes-root{…}` 一段统一接�
 - **旋钮改亮色圆钮。** 旋钮继承的 `--dsw-alias-bg-layer-2` 在深色下解析成 `#2c2c2e`，与 `#232324` 轨道几乎同色——旋钮会直接消失。改成 `#f9fafb` 后对填充 ≥2.3、对轨道 ≥10，且「亮色圆钮」正好延续浅色主题白旋钮的意象。
 - **警示扫光带反色。** 浅色主题的 Ultra 警示文字在紫罗兰底上扫一条**深**带（`#653780`）；深色卡片上深带会掉到对比度以下、扫光直接消失，所以深色换成扫**亮**带（`#f3e6ff`）。
 
-`test/palette.mjs` 对两套色板各跑一遍全部下限（24 项），`test/verify.mjs` 另有主题接线断言与「浅色 ink 色值不得回到深色表」的缺陷形状回归；`test/make-dark-shot.mjs` 用真实 CSS 无头渲染 `docs/images/dark-mode.png` 的浅色/深色并排图。
+`test/palette.mjs` 对两套色板各跑一遍全部下限（24 项），`test/verify.mjs` 另有主题接线断言与「浅色 ink 色值不得回到深色表」的缺陷形状回归；`test/make-dark-shot.mjs` 用真实 CSS 无头渲染 `docs/images/dark-mode.png` 的纯深色展示图（主视觉 + 七档卡片 + 警示态）。
 
 ---
 

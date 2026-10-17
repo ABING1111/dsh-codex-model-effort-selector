@@ -27,8 +27,8 @@
 
 ### 变更
 
-- `test/make-preview.mjs` / 新增 `test/make-dark-shot.mjs`：预览与 README 配图改为浅色/深色并排渲染，
-  深色列取真实官方 token，配图 `docs/images/dark-mode.png` 由真实 CSS 无头渲染生成。
+- `test/make-preview.mjs` / 新增 `test/make-dark-shot.mjs`：预览页改为浅色/深色并排；README 新增
+  `docs/images/dark-mode.png` 纯深色展示图（主视觉 + 七档卡片 + 警示态），由真实 CSS 无头渲染生成。
 
 ## [1.0.0] — 2026-02-14
 

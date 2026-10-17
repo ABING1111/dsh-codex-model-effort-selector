@@ -1,6 +1,12 @@
 /**
- * Screenshot the light vs dark effort pane side by side, from the REAL CSS.
- * Usage: node test/make-dark-shot.mjs  ->  docs/images/dark-mode.png
+ * Generate the README's dark-mode showcase from the plugin's REAL CSS.
+ *
+ * Single-theme (dark only) composition: a hero pane floating above a hint of
+ * the composer, then every level rendered on its own card (the eighth cell is
+ * the Ultra warning state). No comparison column — the light theme is
+ * documented by the other shots.
+ *
+ * Usage:  node test/make-dark-shot.mjs   ->  docs/images/dark-mode.png
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -26,16 +32,23 @@ const pick = (name) => {
   for (const kv of m[1].matchAll(/(\w+):\s*'([^']+)'/g)) out[kv[1]] = kv[2];
   return out;
 };
-const FILL = pick('EFFORT_FILL'), INK = pick('EFFORT_INK');
-const FILL_DARK = pick('EFFORT_FILL_DARK'), INK_DARK = pick('EFFORT_INK_DARK');
+const FILL_DARK = pick('EFFORT_FILL_DARK');
+const INK_DARK = pick('EFFORT_INK_DARK');
+const PEAK_GRADIENT = src.match(/--\$\{P\}-peakGradient:([^;"]+)/)?.[1]
+  ?.replaceAll('${P}', P) ?? '';
+if (!PEAK_GRADIENT.includes('linear-gradient')) throw new Error('peak gradient not found');
 
 const EFFORTS = [
-  { id: 'off', label: '关闭' }, { id: 'minimal', label: '极低' },
-  { id: 'low', label: '轻度' }, { id: 'medium', label: '中' },
-  { id: 'high', label: '高' }, { id: 'xhigh', label: '极高' },
-  { id: 'max', label: 'Ultra' }
+  { id: 'off', label: '关闭', en: 'Off' },
+  { id: 'minimal', label: '极低', en: 'Minimal' },
+  { id: 'low', label: '轻度', en: 'Light' },
+  { id: 'medium', label: '中', en: 'Medium' },
+  { id: 'high', label: '高', en: 'High' },
+  { id: 'xhigh', label: '极高', en: 'Extra High' },
+  { id: 'max', label: 'Ultra', en: 'Ultra' }
 ];
 
+/* ---------------------------------------------------------------- helpers -- */
 function mixHex(a, b, t) {
   const pa = [1, 3, 5].map(i => parseInt(a.substr(i, 2), 16));
   const pb = [1, 3, 5].map(i => parseInt(b.substr(i, 2), 16));
@@ -45,7 +58,7 @@ function svg(d, size) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" style="width:${size};height:${size};flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"><path d="${d}"/></svg>`;
 }
 const I = {
-  chevron: 'm9 18 6-6-6-6', reset: 'M3 11a9 9 0 1 1 2.6 7M3 4v7h7',
+  chevron: 'm9 18 6-6-6-6', down: 'm6 9 6 6 6-6', reset: 'M3 11a9 9 0 1 1 2.6 7M3 4v7h7',
   bolt: 'M14.4 2Q16 .2 15.8 2.5L15.1 8.5H20.5Q22 8.5 21 9.8L10.7 21.7Q9 23.4 9.2 21.2L10 14.2H4.2Q2.6 14.2 3.6 12.9L14.4 2Z'
 };
 function sparkles(count = 22) {
@@ -62,10 +75,12 @@ function sparkles(count = 22) {
   return out;
 }
 
-function pane(index, theme, opts = {}) {
+const TRACK = id => mixHex('#232324', FILL_DARK[id], 0.22);
+
+/* ------------------------------------------------------------- components -- */
+/** One full popover pane at a given level. */
+function pane(index, opts = {}) {
   const e = EFFORTS[index];
-  const fill = theme === 'dark' ? FILL_DARK : FILL;
-  const ink = theme === 'dark' ? INK_DARK : INK;
   const peak = e.id === 'max';
   const pos = index / (EFFORTS.length - 1);
   const message = !!opts.message;
@@ -73,14 +88,14 @@ function pane(index, theme, opts = {}) {
     `<i class="${P}-dot${i <= index ? ' passed' : ''}" style="--${P}-tick:${i / (EFFORTS.length - 1)}"></i>`).join('');
   const title = (peak || message) ? '' : `<span class="${P}-heading">${e.label}${svg(I.chevron, '10px')}</span>`;
   return `
-  <div class="${P}-root" data-theme="${theme}">
-  <div class="${P}-popover${peak ? ' peak' : ''}${message ? ' message' : ''}" style="--${P}-ink:${ink[e.id]}">
+  <div class="${P}-root" style="width:272px">
+  <div class="${P}-popover${peak ? ' peak' : ''}${message ? ' message' : ''}" style="--${P}-ink:${INK_DARK[e.id]}">
     <div class="${P}-pane ${P}-main">
-      <button class="${P}-tool ${P}-fast">${svg(I.bolt, '15px')}</button>
-      <button class="${P}-modelLink">${title}<span class="${P}-modelName">6 Astra</span></button>
+      <button class="${P}-tool ${P}-fast${opts.fast ? ' active' : ''}">${svg(I.bolt, '15px')}</button>
+      <button class="${P}-modelLink">${title}<span class="${P}-modelName">${opts.model || '6 Astra'}</span></button>
       <div class="${P}-warning"><span>更快消耗使用额度</span></div>
       <button class="${P}-tool ${P}-reset">${svg(I.reset, '16px')}</button>
-      <div class="${P}-rail" style="--${P}-fill:${fill[e.id]};--${P}-track:${mixHex(theme === 'dark' ? '#232324' : '#e8e7e8', fill[e.id], 0.22)};--${P}-dot:var(--dsw-alias-label-caption,#b6b6b8);--${P}-pos:${pos}">
+      <div class="${P}-rail" style="--${P}-fill:${FILL_DARK[e.id]};--${P}-track:${TRACK(e.id)};--${P}-dot:var(--dsw-alias-label-caption,#b6b6b8);--${P}-pos:${pos}">
         <div class="${P}-fill"></div>${dots}
         <div class="${P}-sparks">${peak ? sparkles() : ''}</div>
         <div class="${P}-knob"></div>
@@ -89,64 +104,122 @@ function pane(index, theme, opts = {}) {
   </div></div>`;
 }
 
-function triggerRow(index, theme) {
+/** The collapsed trigger seat. */
+function trigger(index) {
   const e = EFFORTS[index];
-  const ink = theme === 'dark' ? INK_DARK[e.id] : INK[e.id];
   return `
-  <div class="${P}-root" style="display:inline-flex" data-theme="${theme}">
-  <button class="${P}-trigger${e.id === 'max' ? ' peak' : ''}" style="--${P}-ink:${ink}">
+  <div class="${P}-root" style="display:inline-flex">
+  <button class="${P}-trigger${e.id === 'max' ? ' peak' : ''}" style="--${P}-ink:${INK_DARK[e.id]}">
     <span class="${P}-caption">6 Astra <span class="${P}-triggerEffort">${e.label}</span></span>
-    ${svg(I.chevron, '12px').replace('style="', `class="${P}-chev" style="`)}
+    ${svg(I.down, '12px').replace('style="', `class="${P}-chev" style="`)}
   </button></div>`;
 }
 
-const CHROME = (t) => t === 'dark'
-  ? `--dsw-alias-bg-layer-2:#2c2c2e;--dsw-alias-label-primary:#f9fafb;--dsw-alias-label-secondary:#cfd3d6;
-     --dsw-alias-label-tertiary:#adb2b8;--dsw-alias-label-caption:#81858c;--dsw-alias-border-l1:#ffffff0f;
-     --dsw-alias-interactive-bg-hover:#ffffff14;--dsw-specific-menu:#43454a73;
-     --dsw-elevation-panel:0 0 0 .5px #ffffff0f,0 3px 8px 0 #00000014,0 0 16px 0 #0000000a;
-     --dsw-menu-backdrop-filter:none;color-scheme:dark;`
-  : `--dsw-alias-bg-layer-2:#ffffff;--dsw-alias-label-primary:#0f1115;--dsw-alias-label-secondary:#61666b;
-     --dsw-alias-label-tertiary:#81858c;--dsw-alias-label-caption:#adb2b8;--dsw-alias-border-l1:rgba(0,0,0,.07);
-     --dsw-alias-interactive-bg-hover:#2631480f;--dsw-specific-menu:#f8f9fa94;
-     --dsw-elevation-panel:0 0 0 .5px rgba(0,0,0,.07),0 3px 8px 0 #00000008,0 0 16px 0 #00000005;
-     --dsw-menu-backdrop-filter:none;`;
-
-const column = (theme, title) => `
-  <div class="col ${theme}">
-    <div class="label">${title}</div>
-    ${EFFORTS.map((_, i) => `<div class="host">${pane(i, theme)}</div>`).join('')}
-    <div class="label">Ultra 警示态</div>
-    <div class="host">${pane(6, theme, { message: true })}</div>
-    <div class="label">收起态按钮</div>
-    <div class="triggers">${triggerRow(4, theme)}${triggerRow(6, theme)}</div>
+/* ------------------------------------------------------------------ layout -- */
+function hero() {
+  return `
+  <div class="hero">
+    <div class="composer">
+      <div class="heroHost">${pane(4, { fast: true })}</div>
+      <div class="seatRow">
+        ${trigger(4)}
+        ${trigger(6)}
+        ${trigger(0)}
+      </div>
+      <div class="seatHint">收起态 · 档位色跟随当前档</div>
+    </div>
   </div>`;
+}
+
+/* 8 cells: the seven levels + the Ultra warning state. */
+function specimens() {
+  const card = (i, head, opts = {}) => `
+    <div class="cell">
+      <div class="cellHead">${head}</div>
+      <div class="cellBody">${pane(i, opts)}</div>
+    </div>`;
+  const head = (i, name, en) => `
+    <span class="swatch" style="background:${FILL_DARK[EFFORTS[i].id]}"></span>
+    <span class="cellName">${name}</span>
+    <span class="cellEn" style="color:${INK_DARK[EFFORTS[i].id]}">${en}</span>
+    <span class="cellHex">${FILL_DARK[EFFORTS[i].id]}</span>`;
+  const cells = EFFORTS.map((e, i) => card(i, head(i, e.label, e.en)));
+  cells.push(card(6, head(6, 'Ultra · 警示', 'Quota warning'), { message: true }));
+  return `
+  <div class="section">
+    <div class="sectionTitle">七档实渲染 + 警示态</div>
+    <div class="grid">${cells.join('')}</div>
+  </div>`;
+}
 
 const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>dark-mode</title>
 <style>${css}
 *{animation:none!important;transition:none!important}
-body{margin:0;padding:20px;background:#d9dce1;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
-.stage{display:flex;gap:22px;align-items:flex-start}
-.col{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:12px}
-.col.light{background:#f8f8f8}
-.col.dark{background:#151517}
-.label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
-.light .label{color:#707073}.dark .label{color:#8a8f98}
-.host{position:relative;width:272px;height:104px}
-.host .${P}-popover{position:absolute!important;bottom:auto!important;left:0!important;top:0!important}
-.triggers{display:flex;gap:8px;align-items:center;min-height:34px}
-/* per-theme chrome, exactly as the shipped tokens resolve */
-.col.light{${CHROME('light')}}
-.col.dark{${CHROME('dark')}}
-/* the dark chrome block from client.js, applied per column */
-.col.dark{--cmes-knob:#f9fafb;--cmes-dotPassed:#f9fafb;--cmes-accent:#7aaaff;--cmes-accentPeak:#c39bff;
-  --cmes-accentHalo:rgba(122,170,255,.20);--cmes-warnHi:#c39bff;--cmes-warnLo:#f3e6ff;
-  --cmes-peakGradient:linear-gradient(90deg,#3e89ff 0%,#438bff 10%,#518dff 20%,#668bff 30%,#7c8aff 40%,#9386ff 50%,#a084ff 55%,#a785ff 60%,#b085ff 65%,#b087ff 70%,#af8bff 75%,#ae8fff 80%,#ae91ff 85%,#af95ff 93%,#b296fe 100%);
+body{margin:0;background:#0c0c0e;color:#e9e9ec;
+  font-family:"Segoe UI Variable Text","Segoe UI",system-ui,"Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.canvas{width:720px;padding:36px 40px 34px;box-sizing:border-box;
+  background:
+    radial-gradient(620px 300px at 10% -8%, rgba(146,143,255,.14), transparent 62%),
+    radial-gradient(520px 280px at 94% 0%, rgba(189,145,255,.11), transparent 60%),
+    linear-gradient(180deg,#131316 0%,#0c0c0e 100%)}
+.masthead{display:flex;align-items:baseline;gap:12px;margin-bottom:24px}
+.mastheadTitle{font-size:19px;font-weight:600;letter-spacing:.01em}
+.mastheadSub{margin-left:auto;font-size:11px;color:#77787f}
+.mastheadRule{flex:1;height:.5px;background:rgba(255,255,255,.10);align-self:center}
+
+/* ---- hero: the popover floating above a hint of the composer ---- */
+.hero{display:flex;justify-content:center;margin:4px 0 26px}
+.composer{position:relative;width:340px;padding:18px 34px 14px;border-radius:16px;
+  background:#1b1b1f;
+  box-shadow:0 0 0 .5px rgba(255,255,255,.07),0 20px 48px rgba(0,0,0,.55)}
+.heroHost{position:relative;width:272px;height:104px;margin:0 auto}
+.heroHost .${P}-popover{position:absolute!important;bottom:auto!important;left:0!important;top:0!important}
+.seatRow{display:flex;gap:6px;justify-content:center;margin-top:12px}
+.seatHint{text-align:center;font-size:10.5px;color:#6f7076;margin-top:7px}
+
+/* ---- specimen grid ---- */
+.section{margin-bottom:4px}
+.sectionTitle{font-size:10.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:#8a8f98;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cell{border-radius:12px;padding:11px 12px 9px;background:#17171a;
+  box-shadow:0 0 0 .5px rgba(255,255,255,.055)}
+.cellHead{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.swatch{width:9px;height:9px;border-radius:3px;flex:none}
+.cellName{font-size:12.5px;font-weight:600;color:#e9e9ec}
+.cellEn{font-size:10.5px}
+.cellHex{margin-left:auto;font-size:9.5px;color:#6f7076;font-family:Consolas,monospace}
+/* each cell hosts its own fixed-positioned popover, pinned to the card */
+.cellBody{position:relative;width:272px;height:104px;margin:0 auto}
+.cellBody .${P}-popover{position:absolute!important;bottom:auto!important;left:0!important;top:0!important}
+
+/* shipped dark chrome, pinned for this standalone page (in the real client it
+   resolves from body[data-ds-dark-theme]) */
+.canvas{
+  --dsw-alias-bg-layer-2:#2c2c2e;--dsw-alias-label-primary:#f9fafb;
+  --dsw-alias-label-secondary:#cfd3d6;--dsw-alias-label-tertiary:#adb2b8;
+  --dsw-alias-label-caption:#81858c;--dsw-alias-border-l1:#ffffff0f;
+  --dsw-alias-interactive-bg-hover:#ffffff14;--dsw-specific-menu:#43454a73;
+  --dsw-elevation-panel:0 0 0 .5px #ffffff0f,0 3px 8px 0 #00000014,0 0 16px 0 #0000000a;
+  --dsw-menu-backdrop-filter:none;
+  /* the dark block from client.js */
+  --cmes-knob:#f9fafb;--cmes-knobShadow:rgba(0,0,0,.45);
+  --cmes-dotPassed:#f9fafb;
+  --cmes-accent:#7aaaff;--cmes-accentPeak:#c39bff;--cmes-accentHalo:rgba(122,170,255,.20);
+  --cmes-warnHi:#c39bff;--cmes-warnLo:#f3e6ff;
+  --cmes-peakGradient:${PEAK_GRADIENT};
   --dsw-elevation-stroke-color:rgba(176,133,255,.45)}
 </style></head><body>
-<div class="stage">
-  ${column('light', '浅色 · v1.0.1（未改动）')}
-  ${column('dark', '深色 · v1.0.1（本次修复）')}
+<div class="canvas">
+  <div class="masthead">
+    <span class="mastheadTitle">深色模式</span>
+    <span class="mastheadRule"></span>
+    <span class="mastheadSub">dsh-codex-model-effort-selector · v1.0.1</span>
+  </div>
+  ${hero()}
+  ${specimens()}
 </div>
 </body></html>`;
 
@@ -166,8 +239,8 @@ if (!browser) {
 } else {
   execFileSync(browser, [
     '--headless=new', '--disable-gpu', '--hide-scrollbars', '--force-device-scale-factor=2',
-    `--screenshot=${png}`, '--window-size=640,1120', '--default-background-color=00000000',
-    new URL(import.meta.url).protocol === 'file:' ? 'file:///' + join(OUT, 'dark-mode.html').replace(/\\/g, '/') : ''
+    `--screenshot=${png}`, '--window-size=720,992', '--default-background-color=00000000',
+    'file:///' + join(OUT, 'dark-mode.html').replace(/\\/g, '/')
   ], { stdio: 'ignore' });
   console.log('wrote', png);
 }
