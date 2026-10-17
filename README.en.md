@@ -5,9 +5,9 @@
 > it replaces the compact model seat above the composer with a Codex-style
 > popover — one trigger, two panes.
 
-![version](https://img.shields.io/badge/version-1.0.0-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-1.0.1-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-76%20passing-brightgreen?style=flat-square)
+![tests](https://img.shields.io/badge/tests-93%20passing-brightgreen?style=flat-square)
 ![dsh](https://img.shields.io/badge/DSH-0.2.0--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 
@@ -26,6 +26,7 @@
 
 - [What it is](#what-it-is)
 - [Features](#features)
+  - [Dark mode](#dark-mode)
 - [Install](#install)
 - [Usage](#usage)
 - [Compatibility & known limitations](#compatibility--known-limitations)
@@ -118,11 +119,41 @@ real speed or usage.
   So the warning appears **immediately** rather than after 1.8 s. Staying on Ultra does not
   re-trigger it, and leaving Ultra restores the heading **instantly** (no need to wait out the 1.8 s)
 
+### Dark mode
+
+![Dark mode: light and dark side by side](docs/images/dark-mode.png)
+
+Light on the left, dark on the right — the same component rendered from the same CSS. In the
+dark theme **the entire palette is re-solved against the shipped dark surfaces**:
+
+- **Theme detection reads the official signal**: the `data-ds-dark-theme` attribute on `<body>`
+  (set by the official theme boot script; every shipped dark token keys off that same selector).
+  It deliberately does **not** use `prefers-color-scheme` — when the user pins "dark" while the
+  OS is light, the media query disagrees with the palette actually in force. A `MutationObserver`
+  subscription recolours **live** when the theme is switched in settings, no reload needed
+- **All seven stops re-solved**: v1.0.0's light inks all fall below AA on the dark card
+  (`high` reached only 1.83:1 — practically invisible). The dark table keeps the same hue axis
+  (blue → violet) but luminance now **rises** with effort — on a dark card, "darker" means
+  "less visible"
+- **The rail becomes an inset groove** `#232324`: the pale `#e8e7e8` was an 11.3:1 glare bar
+  on the dark card
+- **The knob becomes a bright puck**: the token it inherited resolved to `#2c2c2e` in dark,
+  nearly identical to the track — the knob simply vanished
+- **The Ultra warning sweep inverts**: the light theme sweeps a dark band over violet text,
+  which drops below contrast on a dark card, so dark sweeps a light band; all 15 gradient stops
+  were lifted above the track floor too
+- The light theme is **bit-for-bit unchanged**: both palettes are validated against every WCAG
+  floor by `test/palette.mjs` (24 assertions), with a regression guard against light values
+  leaking back into the dark table
+
 ### Accessibility & robustness
 
 - `role="slider"` with `aria-valuemin/max/now/valuetext`; the popover carries
   `aria-expanded`/`aria-haspopup`/`aria-busy` and is `inert` while closed
-- Every fill and ink clears its WCAG floor (asserted per-item by `test/palette.mjs`)
+- Every fill and ink clears its WCAG floor **in both themes** (asserted per-item
+  by `test/palette.mjs`, once per palette)
+- **Dark mode**: see [the section above](#dark-mode) — official signal detection, shipped dark
+  surfaces, live recolouring on theme switch
 - **Fail-open**: it registers no host hooks, emits no events and touches no official
   classes or text. If any anchor is unrecognisable (directory not ready, not its own
   session, subagent session) it **does nothing**, leaving the official UI intact
@@ -232,11 +263,12 @@ The package itself is **dependency-free** — no `npm install` needed:
 # syntax check
 node --check client.js
 
-# offline assertion suite (33: loading / registration contract / shadowing / geometry /
-# palette / fail-open / accessibility / two-level drill-down)
+# offline assertion suite (35: loading / registration contract / shadowing / geometry /
+# palette / theme wiring / fail-open / accessibility / two-level drill-down)
 node test/verify.mjs
 
-# palette assertions (10: the three WCAG floors + monotonic hue + saturation + uniqueness)
+# palette assertions (24: the three WCAG floors for BOTH themes + monotonic hue +
+# chroma + uniqueness + theme-signal checks)
 node test/palette.mjs
 
 # collapse-bug regression (6: runs BOTH the buggy and the fixed state machine)
@@ -252,8 +284,11 @@ node test/encoding.mjs
 # regenerate the README screenshots (extracts the real CSS from client.js; needs Edge/Chrome)
 node test/make-readme-shots.mjs
 
-# build the browser preview page (same real-CSS extraction)
+# build the browser preview page (same real-CSS extraction, light and dark side by side)
 node test/make-preview.mjs   # then open test/preview.html
+
+# regenerate the dark-mode comparison shot (light vs dark, headless real-CSS render)
+node test/make-dark-shot.mjs   # writes docs/images/dark-mode.png
 ```
 
 A few deliberate choices in the test bench:

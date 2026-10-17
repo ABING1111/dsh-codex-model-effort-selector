@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-model-effort-selector",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Codex desktop style model + reasoning-effort selector for DeepSeek Harness: one trigger, one popover, a model list pane and a pixel-replica effort slider.",
   "type": "module",
   "license": "MIT",

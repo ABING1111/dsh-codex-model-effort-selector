@@ -313,6 +313,30 @@ CSS 侧第二道保险：`max-height:calc(100vh - var(--cmes-bottom,40px) - 12px
 
 `#3a83f7`、`#3b83f6`、`#a779fe`、`#7448ee`、`#8b46ee` 五个实测色值被 `verify.mjs` 断言必须存在于源码里。峰值态还叠加：`::before` 斜向扫光（`shimmer 4.5s`，`translateX(-45%) → 45%`）、刻度点 `opacity:0`、星尘粒子层亮起。
 
+### 深色模式：两套色板是数学必需
+
+v1.0.0 只有一套按浅色表面解出的色板，深色模式下「高」档标题 ink `#4a3fc0` 落在官方深色卡片 `#2a2b2e` 上只有 **1.83:1**（AA 要求 4.5），七档 ink 全军覆没；轨道底色还固定用浅灰 `#e8e7e8` 当基色，在深色卡片上是一条 11.3:1 的亮条。
+
+单套色板为什么救不回来——ink 要过 AA 下限，两个主题给出的亮度**窗口不相交**：
+
+| 主题 | 卡片 | ink 亮度约束 |
+|---|---|---|
+| 浅色 | `#ffffff` | ≤ 0.183（必须够暗） |
+| 深色 | `#2a2b2e` | ≥ 0.289（必须够亮） |
+
+所以 `EFFORT_FILL`/`EFFORT_INK` 之外另有 `EFFORT_FILL_DARK`/`EFFORT_INK_DARK`，由 `fillFor(id, dark)` / `inkFor(id, dark)` 按主题取用。深色表的解法保留浅色的**色相轴**（216°→264° 蓝→紫），但把能量读数反转：亮度随档位**上升**（0.245 → 0.383）——深色底上「更暗」意味着「更看不清」，浅色里「加深 = 更用力」的隐喻只能翻过来。
+
+**主题判定读官方信号，不读 `prefers-color-scheme`。** 官方主题插件在启动脚本里 `document.body.toggleAttribute('data-ds-dark-theme', dark)`，且整套官方深色 token 都挂在 `body[data-ds-dark-theme]` 选择器下。媒体查询报告的是**系统**方案：用户在设置里固定选「深色」而系统是浅色时，两者相反。组件用 `useSyncExternalStore` + 只过滤这一个属性的 `MutationObserver` 订阅，切换主题即时变色、无需重载或重挂。
+
+**深色表面全部取自官方 token**（`@deepseek-ai/dsh-client-ui-theme`，v0.2.0-rc.2）：卡片 `--dsw-specific-menu`（`#43454a73` 叠在页面 `#151517` 上 ≈ `#2a2b2e`）、轨道 `--dsw-alias-bg-layer-1`（`#232324` 内嵌凹槽）、旋钮 `--dsw-alias-label-primary`（`#f9fafb`）。ink 按**最亮**的深色表面（`--dsw-alias-bg-layer-3` = `#353638`）校验，过了它就处处过。
+
+CSS 静态外观由 `body[data-ds-dark-theme] .cmes-root{…}` 一段统一接管，其余表面/描边/文字色走 `--dsw-alias-*` token 本来就会自己翻转。两处值得说明：
+
+- **旋钮改亮色圆钮。** 旋钮继承的 `--dsw-alias-bg-layer-2` 在深色下解析成 `#2c2c2e`，与 `#232324` 轨道几乎同色——旋钮会直接消失。改成 `#f9fafb` 后对填充 ≥2.3、对轨道 ≥10，且「亮色圆钮」正好延续浅色主题白旋钮的意象。
+- **警示扫光带反色。** 浅色主题的 Ultra 警示文字在紫罗兰底上扫一条**深**带（`#653780`）；深色卡片上深带会掉到对比度以下、扫光直接消失，所以深色换成扫**亮**带（`#f3e6ff`）。
+
+`test/palette.mjs` 对两套色板各跑一遍全部下限（24 项），`test/verify.mjs` 另有主题接线断言与「浅色 ink 色值不得回到深色表」的缺陷形状回归；`test/make-dark-shot.mjs` 用真实 CSS 无头渲染 `docs/images/dark-mode.png` 的浅色/深色并排图。
+
 ---
 
 ## 粒子
@@ -503,8 +527,8 @@ finally { busyRef.current = false; /* ... */ }
 
 | 文件 | 项数 | 测什么 |
 |---|---|---|
-| `test/verify.mjs` | 33 | 加载、注册契约、遮蔽、几何常量、配色存在性、fail-open、无障碍、两级下钻 |
-| `test/palette.mjs` | 10 | 三条 WCAG 下限、色相单调、饱和度、去重、混色助手 |
+| `test/verify.mjs` | 35 | 加载、注册契约、遮蔽、几何常量、配色存在性、主题接线、fail-open、无障碍、两级下钻 |
+| `test/palette.mjs` | 24 | 浅色/深色两套色板各过一遍三条 WCAG 下限、色相单调、色度、去重、混色助手、主题信号 |
 | `test/collapse-regression.mjs` | 6 | **同时实现有 bug 与修好后的两个状态机**，并断言源码里反转读法已消失 |
 | `test/slots-integration.mjs` | 4 | 对着**真实 SlotCore** 的遮蔽与卸载恢复 |
 | `test/encoding.mjs` | 逐文件 | 干净 UTF-8、无 BOM、无 GBK 乱码；README 标题未被截断 |
@@ -531,7 +555,7 @@ finally { busyRef.current = false; /* ... */ }
 | **宽度 272 / 旋钮 30** | 取参考实现的整数值；实测 277.3 / 28.9（差 <2%，肉眼不可辨） |
 | **粒子相位不可复现** | 录屏无法提取原始随机种子，改用确定性伪随机 |
 | **行高常量硬编码** | `ROW_H` 等必须与 CSS 手工同步；`verify.mjs` 断言二者一致来兜住漂移 |
-| **轨道底色基色固定** | `mixHex('#e8e7e8', fill, 0.22)` 以浅色为基，未按深色主题切换（其余部分走 `--dsw-alias-*`） |
+| **深色/浅色两套色板** | 单套色板在数学上不可行：ink 要过 AA，浅色卡片要求亮度 ≤0.183，深色卡片要求 ≥0.289，两区间不相交。深色判定读 `<body>` 的 `data-ds-dark-theme`（官方信号），不用 `prefers-color-scheme`——固定偏好下媒体查询与实际色板相反 |
 | **一级列表不可搜索** | 搜索框只在第二级；provider 数量远小于模型数量，故未做 |
 | **换模型落在中间档** | `floor(n/2)` 是参考实现规则；无档位的模型整个不发 `reasoningEffort` 键（缺席 = 「对档位没意见」，与显式 `null` 不同） |
 | **Ultra 命名沿用 Codex** | `max` 档在 Codex 里叫 Ultra；若某模型把最高档命名为别的 id，则显示模型自己的名字 |

@@ -4,9 +4,9 @@
 > **Codex 桌面版风格「模型 + 推理强度」选择器**：
 > 把输入框上那枚紧凑的模型席按钮，换成 Codex 风格的弹层 —— 一个入口，两块面板。
 
-![version](https://img.shields.io/badge/version-1.0.0-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-1.0.1-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-76%20passing-brightgreen?style=flat-square)
+![tests](https://img.shields.io/badge/tests-93%20passing-brightgreen?style=flat-square)
 ![dsh](https://img.shields.io/badge/DSH-0.2.0--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 
@@ -24,6 +24,7 @@
 
 - [这是什么](#这是什么)
 - [功能](#功能)
+  - [深色模式](#深色模式)
 - [安装](#安装)
 - [使用](#使用)
 - [兼容性与已知限制](#兼容性与已知限制)
@@ -101,10 +102,29 @@ DSH 输入框上原本只有一枚很小的模型按钮。本插件用 `priority
   也就是说警示是**立刻出现**、而不是等 1.8 秒才出现；
   期间停留在 Ultra 不会重复触发，一旦离开 Ultra 则**立即**恢复（不必等满 1.8 秒）
 
+### 深色模式
+
+![深色模式：浅色与深色并排对比](docs/images/dark-mode.png)
+
+左列浅色、右列深色，两列都是同一组件、同一份 CSS 的真实渲染。深色主题下**整套配色按官方深色表面重新求解**：
+
+- **主题判定读官方信号**：`<body>` 上的 `data-ds-dark-theme` 属性（官方主题启动脚本写入、官方深色 token 全挂在这选择器上），
+  刻意**不用** `prefers-color-scheme` —— 用户固定选「深色」而系统是浅色时，媒体查询会与实际生效的色板相反。
+  用 `MutationObserver` 订阅，在设置里切换主题**即时变色**，无需重载
+- **七档全部重新求解**：v1.0.0 的浅色 ink 在深色卡片上全部跌破 AA（「高」档仅 1.83:1，几乎不可见）；
+  深色表保留同一色相轴（蓝→紫），但亮度随档位**上升** —— 深色底上「更暗」意味着「更看不清」
+- **轨道换成内嵌凹槽** `#232324`：浅灰 `#e8e7e8` 在深色卡片上是一条 11.3:1 的刺眼亮条
+- **旋钮换成亮色圆钮**：原 token 在深色下解析成 `#2c2c2e`，与轨道几乎同色而消失
+- **Ultra 警示扫光带反转**：浅色主题在紫罗兰底上扫一条深带，深色卡片上会掉到对比度以下，
+  深色改成扫亮带；流动渐变 15 个色标也全部抬到轨道对比度之上
+- 浅色主题**逐位未动**：两套色板由 `test/palette.mjs` 各自校验全部 WCAG 下限（24 项），
+  并有回归断言防止浅色色值回流到深色表
+
 ### 无障碍与稳健性
 
 - `role="slider"` + `aria-valuemin/max/now/valuetext`；弹层 `aria-expanded`/`aria-haspopup`/`aria-busy`，收起时 `inert`
-- 每档填充色与文字色都过了 WCAG 对比度下限（`test/palette.mjs` 逐条断言）
+- 每档填充色与文字色都过了 WCAG 对比度下限，**浅色/深色两套色板各验一遍**（`test/palette.mjs` 逐条断言）
+- **深色模式**：见[上文专节](#深色模式) —— 官方信号判定、官方深色表面求解、切换即时变色
 - **fail-open**：不注册任何宿主钩子、不发事件、不碰官方 class 与文字；
   任何一步认不出（目录未就绪、不是自己的会话、subagent 会话）就**什么都不做**，官方界面保持原样
 
@@ -200,10 +220,10 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 # 语法检查
 node --check client.js
 
-# 离线断言套件（33 项：加载 / 注册契约 / 遮蔽 / 几何 / 配色 / fail-open / 无障碍 / 两级下钻）
+# 离线断言套件（35 项：加载 / 注册契约 / 遮蔽 / 几何 / 配色 / 主题接线 / fail-open / 无障碍 / 两级下钻）
 node test/verify.mjs
 
-# 配色断言（10 项：三条 WCAG 下限 + 色相单调 + 饱和度 + 去重）
+# 配色断言（24 项：浅色 + 深色各过一遍三条 WCAG 下限 + 色相单调 + 色度 + 去重）
 node test/palette.mjs
 
 # 折叠 bug 回归（6 项：同时跑有 bug 与修好后的两个状态机）
@@ -219,8 +239,11 @@ node test/encoding.mjs
 # 重新生成 README 截图（从 client.js 抽取真实 CSS；需要 Edge/Chrome）
 node test/make-readme-shots.mjs
 
-# 生成浏览器预览页（同样抽取真实 CSS）
+# 生成浏览器预览页（同样抽取真实 CSS，浅色/深色并排）
 node test/make-preview.mjs   # 然后打开 test/preview.html
+
+# 重新生成深色模式对比图（浅色 vs 深色，真实 CSS 无头渲染）
+node test/make-dark-shot.mjs   # 输出 docs/images/dark-mode.png
 ```
 
 几个测试台的设计值得说明：

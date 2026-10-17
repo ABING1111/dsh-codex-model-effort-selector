@@ -92,14 +92,18 @@ window.__ModuleLoader__.load({
     /* ------------------------------------------------------------------ *
      * Per-effort palette.
      *
-     * Every value clears three WCAG floors, verified by `test/palette.mjs`:
-     *   A. fill vs the unfilled rail (#e8e7e8) >= 2.5  — the fill must be visible
-     *   B. white knob vs fill               >= 2.2  — the knob must stay readable
-     *   C. heading ink vs card (#f8f8f8)    >= 4.5  — AA body text
+     * Every value clears three WCAG floors, verified by `test/palette.mjs`,
+     * SEPARATELY PER THEME (the shipped dark card #2a2b2e and the light card
+     * #f8f9fa composite differ by ~13:1 in luminance, so no single ramp can
+     * serve both — see the disjoint luminance windows in docs/ARCHITECTURE.md):
+     *   A. fill vs the unfilled rail                      >= 2.5
+     *   B. knob vs fill                                   >= 2.2
+     *   C. heading ink vs card                            >= 4.5  — AA body text
      *
-     * `minimal` cannot be a genuinely light blue: anything lighter than ~#4a8ef8
-     * drops below floor A against the pale rail and washes out. The "low energy"
-     * feel therefore comes from ink + saturation, not from lightness.
+     * `minimal` cannot be a genuinely light blue in LIGHT mode: anything
+     * lighter than ~#4a8ef8 drops below floor A against the pale rail and
+     * washes out. The "low energy" feel therefore comes from ink + saturation,
+     * not from lightness.
      *
      * `off` is deliberately neutral slate — a closed level must not look
      * energised, and it must not be mistakable for the pale-violet Ultra.
@@ -119,9 +123,37 @@ window.__ModuleLoader__.load({
       off: '#707073', minimal: '#2b62bd', low: '#2f6fd0', medium: '#3a55b8',
       high: '#4a3fc0', xhigh: '#6a35c8', max: '#8b46ee'
     };
+    /* ------------------------------------------------------------------ *
+     * Dark palette — solved per level against the SHIPPED dark surfaces
+     * (`@deepseek-ai/dsh-client-ui-theme`, v0.2.0-rc.2):
+     *   card  = --dsw-specific-menu #43454a73 over page #151517 -> #2a2b2e
+     *   card token fallback = --dsw-alias-bg-layer-2            -> #2c2c2e
+     *   card upper bound    = --dsw-alias-bg-layer-3            -> #353638
+     *   rail  = --dsw-alias-bg-layer-1 (an inset groove)        -> #232324
+     *   knob  = --dsw-alias-label-primary (a bright puck)       -> #f9fafb
+     * Ink is checked against the LIGHTEST surface (#353638) so it clears 4.5
+     * everywhere the component can be painted.
+     *
+     * The ramp keeps the light palette's HUE axis (216 -> 264deg, blue to
+     * violet) but inverts the energy reading: in light mode effort read as a
+     * deepening ink, while on a dark card darker ink means LESS visible, so
+     * relative luminance now rises 0.245 -> 0.383 as effort climbs. Fills stay
+     * below the knob's luminance so the knob still reads against the fill, and
+     * inks stay above every dark surface so the level name never disappears.
+     * ------------------------------------------------------------------ */
+    const EFFORT_FILL_DARK = {
+      off: '#737378', minimal: '#3684ff', low: '#448dff', medium: '#6e90ff',
+      high: '#928fff', xhigh: '#b18dff', max: '#bd91ff'
+    };
+    const EFFORT_INK_DARK = {
+      off: '#a9a9ae', minimal: '#73a9ff', low: '#76aafe', medium: '#8ba7ff',
+      high: '#a4a2ff', xhigh: '#bc9cff', max: '#c39bff'
+    };
     /* Unknown ids fall between `low` and `high` so a custom level still reads. */
     const FILL_FALLBACK = '#3a83f7';
     const INK_FALLBACK = '#2f6fd0';
+    const FILL_FALLBACK_DARK = '#448dff';
+    const INK_FALLBACK_DARK = '#76aafe';
 
     /** Which ladder bucket an effort id belongs to (for the palette). */
     function effortBucket(id) {
@@ -135,13 +167,15 @@ window.__ModuleLoader__.load({
       if (k === 'max' || k === 'ultra') return 'max';
       return null;
     }
-    function fillFor(id) {
+    function fillFor(id, dark) {
       const b = effortBucket(id);
-      return b ? EFFORT_FILL[b] : FILL_FALLBACK;
+      if (b) return (dark ? EFFORT_FILL_DARK : EFFORT_FILL)[b];
+      return dark ? FILL_FALLBACK_DARK : FILL_FALLBACK;
     }
-    function inkFor(id) {
+    function inkFor(id, dark) {
       const b = effortBucket(id);
-      return b ? EFFORT_INK[b] : INK_FALLBACK;
+      if (b) return (dark ? EFFORT_INK_DARK : EFFORT_INK)[b];
+      return dark ? INK_FALLBACK_DARK : INK_FALLBACK;
     }
     /** Mix a hex colour toward another by `t` (0..1). Used for the rail track. */
     function mixHex(a, b, t) {
@@ -149,6 +183,57 @@ window.__ModuleLoader__.load({
       const pb = [1, 3, 5].map(i => parseInt(b.substr(i, 2), 16));
       const out = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
       return '#' + out.map(v => v.toString(16).padStart(2, '0')).join('');
+    }
+    /* self-test: a non-linear mix would silently break the track's floor A */
+    if (mixHex('#000000', '#ffffff', 0.5) !== '#808080') {
+      throw new Error('mixHex self-test failed: the tint is not linear');
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Theme — dark mode detection.
+     *
+     * DSH signals the active palette by toggling `data-ds-dark-theme` on
+     * `<body>` (the boot script sets it before any plugin runs, and the
+     * shipped palette keys every dark token off that same attribute), so the
+     * attribute — NOT `prefers-color-scheme` — is the authoritative signal:
+     * the user can pick "dark" while the OS is light, and the media query
+     * would then disagree with the palette actually in force.
+     *
+     * `useSyncExternalStore` keeps the reactive contract explicit: the store
+     * notifies subscribers through a MutationObserver, so flipping the theme
+     * in settings re-colours the popover live, with no reload.
+     * ------------------------------------------------------------------ */
+    const RAIL_BASE_LIGHT = '#e8e7e8';   // measured from the original recording
+    const RAIL_BASE_DARK = '#232324';    // --dsw-alias-bg-layer-1 (inset groove)
+    /* 22% of the level colour tinted over the rail base — the same mix the
+     * light theme always used, just over a theme-correct base. */
+    const TRACK_TINT = 0.22;
+
+    function isDarkNow() {
+      try {
+        return typeof document !== 'undefined'
+          && document.body != null
+          && document.body.hasAttribute('data-ds-dark-theme') === true;
+      } catch (e) { return false; }
+    }
+    function subscribeTheme(notify) {
+      if (typeof MutationObserver === 'undefined' || typeof document === 'undefined'
+        || document.body == null) return () => {};
+      const mo = new MutationObserver(notify);
+      mo.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] });
+      return () => mo.disconnect();
+    }
+    /** Reactive dark-mode flag for the component tree. */
+    function useDarkTheme() {
+      return useSyncExternalStore(subscribeTheme, isDarkNow, () => false);
+    }
+    /** The rail's un-filled base colour for the active theme. */
+    function railBase(dark) {
+      return dark ? RAIL_BASE_DARK : RAIL_BASE_LIGHT;
+    }
+    /** Tinted track: the base mixed 22% toward the current level's fill. */
+    function trackFor(fill, dark) {
+      return mixHex(railBase(dark), fill, TRACK_TINT);
     }
 
     function rank(id) {
@@ -223,15 +308,15 @@ window.__ModuleLoader__.load({
 .${P}-fast{left:7px}
 .${P}-reset{right:7px}
 .${P}-tool svg{width:16px;height:16px}
-.${P}-fast.active{color:#3988f6}
-.${P}-popover.peak .${P}-fast.active{color:#9b48eb}
+.${P}-fast.active{color:var(--${P}-accent,#3988f6)}
+.${P}-popover.peak .${P}-fast.active{color:var(--${P}-accentPeak,#9b48eb)}
 .${P}-modelLink{position:absolute;left:43px;right:43px;top:8px;height:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2px 4px;border-radius:5px;transition:opacity .2s ease}
 .${P}-modelLink:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .${P}-heading{display:flex;gap:3px;justify-content:center;align-items:center;max-width:100%;height:20px;color:var(--${P}-ink,#3989e9);font-size:14px;line-height:20px;white-space:nowrap;transition:color .2s ease}
 .${P}-heading svg{width:10px;height:10px;color:var(--dsw-alias-label-caption)}
 .${P}-modelName{display:block;max-width:100%;height:18px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .${P}-warning{position:absolute;left:29px;right:29px;top:20px;text-align:center;line-height:18px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s ease}
-.${P}-warning span{display:inline-block;background:linear-gradient(90deg,#a965dd 0%,#a965dd 42%,#653780 50%,#a965dd 58%,#a965dd 100%);background-size:300% 100%;background-position:0 0;background-clip:text;-webkit-background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.${P}-warning span{display:inline-block;background:linear-gradient(90deg,var(--${P}-warnHi,#a965dd) 0%,var(--${P}-warnHi,#a965dd) 42%,var(--${P}-warnLo,#653780) 50%,var(--${P}-warnHi,#a965dd) 58%,var(--${P}-warnHi,#a965dd) 100%);background-size:300% 100%;background-position:0 0;background-clip:text;-webkit-background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
 .${P}-popover.message .${P}-modelLink,.${P}-popover.message .${P}-tool{opacity:0;pointer-events:none}
 .${P}-popover.message .${P}-warning{opacity:1}
 .${P}-popover.message .${P}-warning span{animation:${P}-sweep 1.1s linear .2s 1 both}
@@ -240,24 +325,28 @@ window.__ModuleLoader__.load({
 /* ---------- rail (the measured slider) ----------
    The track itself is tinted toward the current level's fill, so the rail
    reads as "this level" even where it is not yet filled. The fill and track
-   colours are stamped per level by the component. */
+   colours are stamped per level by the component, over the theme's own rail
+   base (measured #e8e7e8 in light, the inset #232324 groove in dark). */
 .${P}-rail{position:absolute;left:12px;right:12px;top:65px;height:26px;border-radius:16px;background:var(--${P}-track,#e8e7e8);touch-action:none;cursor:pointer;transition:background .25s ease}
 .${P}-rail:focus-visible{outline:2px solid var(--dsw-focus-ring-color,#3989e9);outline-offset:2px}
 .${P}-fill,.${P}-sparks{position:absolute;inset:0 auto 0 0;width:calc((100% - 30px)*var(--${P}-pos,0) + 15px);border-radius:13px 0 0 13px;overflow:hidden;pointer-events:none;transition:width .18s cubic-bezier(.2,.8,.2,1)}
 .${P}-fill{background:var(--${P}-fill,#3a83f7);transition:width .18s cubic-bezier(.2,.8,.2,1),background .25s ease}
-.${P}-popover.peak .${P}-fill{background:linear-gradient(90deg,#3b83f6 0%,#3b82f6 10%,#3d7bf3 20%,#4c75f4 30%,#6473fa 40%,#8d80fc 50%,#9375fd 55%,#9d78fd 60%,#a779fe 65%,#a476fe 70%,#9e73fe 75%,#9166fe 80%,#845af9 85%,#7d55f6 93%,#7448ee 100%);background-size:155% 100%;animation:${P}-colorflow 3.8s ease-in-out infinite alternate}
+.${P}-popover.peak .${P}-fill{background:var(--${P}-peakGradient,linear-gradient(90deg,#3b83f6 0%,#3b82f6 10%,#3d7bf3 20%,#4c75f4 30%,#6473fa 40%,#8d80fc 50%,#9375fd 55%,#9d78fd 60%,#a779fe 65%,#a476fe 70%,#9e73fe 75%,#9166fe 80%,#845af9 85%,#7d55f6 93%,#7448ee 100%));background-size:155% 100%;animation:${P}-colorflow 3.8s ease-in-out infinite alternate}
 .${P}-popover.peak .${P}-fill::before{content:"";position:absolute;inset:-10px -40px;background:linear-gradient(100deg,transparent 18%,#ffffff08 35%,#ffffff30 48%,#ffffff06 66%,transparent 84%);animation:${P}-shimmer 4.5s ease-in-out infinite alternate}
 @keyframes ${P}-colorflow{from{background-position:0 0}to{background-position:100% 0}}
 @keyframes ${P}-shimmer{from{transform:translateX(-45%)}to{transform:translateX(45%)}}
 .${P}-dot{position:absolute;top:11px;left:calc((100% - 30px)*var(--${P}-tick,0) + 15px);width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--${P}-dot,#b6b6b8);pointer-events:none;transition:background .18s ease,opacity .18s ease,transform .14s ease}
-.${P}-dot.passed{background:rgba(255,255,255,.55)}
+/* a passed tick sits ON the fill, so it takes the knob's own colour: that is
+   the one surface guaranteed to read against every level's fill in both
+   themes (the light knob is white, the dark knob is #f9fafb). */
+.${P}-dot.passed{background:var(--${P}-dotPassed,rgba(255,255,255,.55))}
 .${P}-dot.hovered{transform:scale(1.75)}
 .${P}-popover.peak .${P}-dot{opacity:0}
 .${P}-sparks{opacity:0;transition:width .18s cubic-bezier(.2,.8,.2,1),opacity .25s ease}
 .${P}-popover.peak .${P}-sparks,.${P}-popover.fast-mode .${P}-sparks{opacity:1}
 .${P}-sp{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;opacity:var(--b,1);transform:scale(var(--b,1));animation:${P}-drift var(--dur,3s) linear infinite;animation-delay:var(--delay,0s)}
 @keyframes ${P}-drift{0%{left:-4%;opacity:0}6%{opacity:var(--b,1)}94%{opacity:var(--b,1)}100%{left:104%;opacity:0}}
-.${P}-knob{position:absolute;left:calc((100% - 30px)*var(--${P}-pos,0));top:-2px;width:30px;height:30px;border-radius:50%;background:var(--dsw-alias-bg-layer-2,#f8f8f8);box-shadow:var(--dsw-elevation-panel),0 1px 3px rgba(0,0,0,.10);border:.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.07));pointer-events:none;z-index:2;transition:left .18s cubic-bezier(.2,.8,.2,1)}
+.${P}-knob{position:absolute;left:calc((100% - 30px)*var(--${P}-pos,0));top:-2px;width:30px;height:30px;border-radius:50%;background:var(--${P}-knob,var(--dsw-alias-bg-layer-2,#f8f8f8));box-shadow:var(--dsw-elevation-panel),0 1px 3px var(--${P}-knobShadow,rgba(0,0,0,.10));border:.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.07));pointer-events:none;z-index:2;transition:left .18s cubic-bezier(.2,.8,.2,1)}
 /* while dragging, the knob must track the pointer with NO transition and NO
    snapping — snapping happens on release. */
 .${P}-rail.dragging .${P}-knob{transition:none}
@@ -300,7 +389,7 @@ window.__ModuleLoader__.load({
 /* Issue 1: a small blue dot marks the provider that holds the CURRENT model,
    so the active group is visible without opening every provider. It is the
    second item (after the name), so it sits at the right end of the row. */
-.${P}-rowDot{flex:none;width:6px;height:6px;border-radius:50%;background:#3a83f7;box-shadow:0 0 0 3px rgba(58,131,247,.16)}
+.${P}-rowDot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--${P}-accent,#3a83f7);box-shadow:0 0 0 3px var(--${P}-accentHalo,rgba(58,131,247,.16))}
 /* The provider row is name + dot + chevron: the name absorbs the free space,
    which pushes the dot and the chevron to the right edge. */
 .${P}-rowName{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -326,6 +415,34 @@ window.__ModuleLoader__.load({
 .${P}-empty{color:var(--dsw-alias-label-tertiary,#9aa0ab);font-size:13px;padding:14px 10px;text-align:center}
 .${P}-failure{border-radius:8px;background:var(--dsw-alias-interactive-bg-hover-danger,rgba(229,72,77,.12));color:var(--dsw-alias-state-error-primary,#e5484d);font-size:12px;line-height:1.6;padding:4px 8px;margin:0 2px 3px;word-break:break-word}
 .${P}-sr{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ---------- dark theme ----------
+   DSH toggles data-ds-dark-theme on <body>; only the static chrome below
+   needs a palette swap, because the fills, inks and track are stamped per
+   level in JS from the EFFORT_*_DARK tables. Surfaces, borders and labels
+   already come from --dsw-alias-* tokens, which flip on their own.
+   Values follow the shipped dark tokens:
+     label-primary #f9fafb | business #7aaaff | bg-layer-1 #232324 */
+body[data-ds-dark-theme] .${P}-root{
+  /* the knob becomes a bright puck: the token it inherits in dark (#2c2c2e)
+     would be near-identical to the #232324 track and would vanish */
+  --${P}-knob:#f9fafb;
+  --${P}-knobShadow:rgba(0,0,0,.45);
+  /* a passed tick matches the knob, so it reads on every dark fill */
+  --${P}-dotPassed:#f9fafb;
+  /* accents lift to the shipped dark business/peak hues */
+  --${P}-accent:#7aaaff;
+  --${P}-accentPeak:#c39bff;
+  --${P}-accentHalo:rgba(122,170,255,.20);
+  /* the quota shimmer sweeps a LIGHT band on a dark card: the light theme's
+     dark band would dip below the card contrast and vanish */
+  --${P}-warnHi:#c39bff;
+  --${P}-warnLo:#f3e6ff;
+  /* the Ultra gradient keeps its hue arc but every stop clears the track */
+  --${P}-peakGradient:linear-gradient(90deg,#3e89ff 0%,#438bff 10%,#518dff 20%,#668bff 30%,#7c8aff 40%,#9386ff 50%,#a084ff 55%,#a785ff 60%,#b085ff 65%,#b087ff 70%,#af8bff 75%,#ae8fff 80%,#ae91ff 85%,#af95ff 93%,#b296fe 100%);
+  /* Ultra's elevation stroke reads at dark contrast */
+  --dsw-elevation-stroke-color:rgba(176,133,255,.45);
+}
 `;
 
     /* ------------------------------------------------------------------ *
@@ -428,6 +545,9 @@ window.__ModuleLoader__.load({
       /* Ultra styling keys on the *id*, never on "is the last stop" — otherwise
        * a two-level model (light/high) would paint its top stop violet. */
       const peak = isPeakId(displayed);
+      /* Per-theme palette: every fill/ink/track value below is picked for the
+       * active theme, so a live theme switch re-colours without a remount. */
+      const dark = useDarkTheme();
       const modelName = model?.name || selection?.model || t('choose');
       const disabled = Boolean(locked || !available);
       const sparkles = useMemo(() => buildSparkles(22), []);
@@ -1013,9 +1133,9 @@ window.__ModuleLoader__.load({
                * level, so every stop reads as its own colour instead of only
                * Ultra being special. */
               style: {
-                [`--${P}-fill`]: fillFor(displayed),
-                [`--${P}-track`]: mixHex('#e8e7e8', fillFor(displayed), 0.22),
-                [`--${P}-ink`]: inkFor(displayed),
+                [`--${P}-fill`]: fillFor(displayed, dark),
+                [`--${P}-track`]: trackFor(fillFor(displayed, dark), dark),
+                [`--${P}-ink`]: inkFor(displayed, dark),
                 [`--${P}-dot`]: 'var(--dsw-alias-label-caption,#b6b6b8)',
                 /* one unitless fraction drives both knob and fill */
                 [`--${P}-pos`]: fraction
@@ -1054,7 +1174,7 @@ window.__ModuleLoader__.load({
           'aria-label': `${modelName} ${triggerLabel}`.trim(),
           'aria-expanded': open, 'aria-haspopup': 'dialog', 'aria-busy': busy,
           /* the collapsed seat also shows the level colour (issue 3) */
-          style: { [`--${P}-ink`]: inkFor(savedEffort) },
+          style: { [`--${P}-ink`]: inkFor(savedEffort, dark) },
           onClick: () => {
             if (open) close();
             else { setPane(model ? 'effort' : 'models'); setOpen(true); load(); }
@@ -1074,7 +1194,7 @@ window.__ModuleLoader__.load({
             [`--${P}-height`]: `${pane === 'models' ? cappedHeight : 104}px`,
             /* the heading ink is stamped here so the effort pane's title picks
              * up the current level's colour */
-            [`--${P}-ink`]: inkFor(displayed)
+            [`--${P}-ink`]: inkFor(displayed, dark)
           }
         },
           modelsView,

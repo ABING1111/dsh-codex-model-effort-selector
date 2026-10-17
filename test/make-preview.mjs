@@ -81,7 +81,7 @@ const EFFORTS = [
   { id: 'max', label: 'Ultra' }
 ];
 
-/* Mirror the palette in client.js so the preview shows the real colours. */
+/* Mirror the palettes in client.js so the preview shows the real colours. */
 const FILL = {
   off: '#8a8a8f', minimal: '#4a8ef8', low: '#3a83f7', medium: '#4a72f2',
   high: '#5f5ce8', xhigh: '#7b48e8', max: '#914ef6'
@@ -90,6 +90,25 @@ const INK = {
   off: '#707073', minimal: '#2b62bd', low: '#2f6fd0', medium: '#3a55b8',
   high: '#4a3fc0', xhigh: '#6a35c8', max: '#8b46ee'
 };
+/* Dark tables — kept in step with EFFORT_FILL_DARK / EFFORT_INK_DARK. */
+const FILL_DARK = {
+  off: '#737378', minimal: '#3684ff', low: '#448dff', medium: '#6e90ff',
+  high: '#928fff', xhigh: '#b18dff', max: '#bd91ff'
+};
+const INK_DARK = {
+  off: '#a9a9ae', minimal: '#73a9ff', low: '#76aafe', medium: '#8ba7ff',
+  high: '#a4a2ff', xhigh: '#bc9cff', max: '#c39bff'
+};
+const RAIL_BASE = { light: '#e8e7e8', dark: '#232324' };
+/* Chrome colours the CSS resolves per theme; the preview pins them explicitly
+ * because it renders both themes side by side instead of one live body. */
+const CHROME = {
+  light: { card: '#ffffff', label: '#0f1115', accent: '#3988f6' },
+  dark: {
+    card: '#2a2b2e', label: '#f9fafb', accent: '#7aaaff', knob: '#f9fafb',
+    dotPassed: '#f9fafb', accentPeak: '#c39bff'
+  }
+};
 function mixHex(a, b, t) {
   const pa = [1, 3, 5].map(i => parseInt(a.substr(i, 2), 16));
   const pb = [1, 3, 5].map(i => parseInt(b.substr(i, 2), 16));
@@ -97,6 +116,10 @@ function mixHex(a, b, t) {
 }
 
 function effortPane(index, opts = {}) {
+  const theme = opts.theme || 'light';
+  const fill = theme === 'dark' ? FILL_DARK : FILL;
+  const ink = theme === 'dark' ? INK_DARK : INK;
+  const chrome = CHROME[theme];
   const e = EFFORTS[index];
   const peak = e.id === 'max';
   const pos = index / (EFFORTS.length - 1);
@@ -105,16 +128,16 @@ function effortPane(index, opts = {}) {
     `<i class="${P}-dot${i <= index ? ' passed' : ''}" style="--${P}-tick:${i / (EFFORTS.length - 1)}"></i>`).join('');
   const title = peak ? '' : `<span class="${P}-heading">${e.label}${svg(I.chevron, '10px')}</span>`;
   const railStyle = [
-    `--${P}-fill:${FILL[e.id]}`,
-    `--${P}-track:${mixHex('#e8e7e8', FILL[e.id], 0.22)}`,
+    `--${P}-fill:${fill[e.id]}`,
+    `--${P}-track:${mixHex(RAIL_BASE[theme], fill[e.id], 0.22)}`,
     `--${P}-dot:var(--dsw-alias-label-caption,#b6b6b8)`,
     `--${P}-pos:${pos}`
   ].join(';');
   return `
-  <div class="${P}-root">
-  <div class="${P}-popover${peak ? ' peak' : ''}${message ? ' message' : ''}" style="--${P}-ink:${INK[e.id]}">
+  <div class="${P}-root" data-theme="${theme}">
+  <div class="${P}-popover${peak ? ' peak' : ''}${message ? ' message' : ''}" style="--${P}-ink:${ink[e.id]}">
     <div class="${P}-pane ${P}-main">
-      <button class="${P}-tool ${P}-fast">${svg(I.bolt, '15px')}
+      <button class="${P}-tool ${P}-fast${opts.fast ? ' active' : ''}">${svg(I.bolt, '15px')}
         <span class="${P}-tip"><span class="${P}-tipTitle">1.5 倍速</span><span>用量更多</span><span>(仅视觉效果)</span></span>
       </button>
       <button class="${P}-modelLink">
@@ -216,11 +239,12 @@ function modelsPane(query = '', view = 1, subProvider = null) {
   </div></div>`;
 }
 
-function trigger(effortIdx) {
+function trigger(effortIdx, theme = 'light') {
   const e = EFFORTS[effortIdx];
+  const ink = theme === 'dark' ? INK_DARK[e.id] : INK[e.id];
   return `
-  <div class="${P}-root" style="display:inline-flex">
-  <button class="${P}-trigger${e.id === 'max' ? ' peak' : ''}" style="--${P}-ink:${INK[e.id]}">
+  <div class="${P}-root" style="display:inline-flex" data-theme="${theme}">
+  <button class="${P}-trigger${e.id === 'max' ? ' peak' : ''}" style="--${P}-ink:${ink}">
     <span class="${P}-caption">6 Astra <span class="${P}-triggerEffort">${e.label}</span></span>
     ${svg(I.down, '12px').replace('style="', `class="${P}-chev" style="`)}
   </button></div>`;
@@ -229,20 +253,60 @@ function trigger(effortIdx) {
 const html = `<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <title>Plugin preview — Codex model & effort selector</title>
-<style>${css}${HARNESS}</style>
+<style>${css}${HARNESS}
+/* preview-only: emulate both shipped themes side by side. In the real client
+   DSH toggles data-ds-dark-theme on <body> and the tokens flip on their own. */
+[data-theme="light"]{
+  --dsw-alias-bg-layer-2:#ffffff;--dsw-alias-label-primary:#0f1115;
+  --dsw-alias-label-secondary:#61666b;--dsw-alias-label-tertiary:#81858c;
+  --dsw-alias-label-caption:#adb2b8;--dsw-alias-border-l1:rgba(0,0,0,.07);
+  --dsw-alias-interactive-bg-hover:#2631480f;--dsw-specific-menu:#f8f9fa94;
+  --dsw-elevation-panel:0 0 0 .5px rgba(0,0,0,.07),0 3px 8px 0 #00000008,0 0 16px 0 #00000005;
+  --dsw-menu-backdrop-filter:none;
+}
+[data-theme="dark"]{
+  --dsw-alias-bg-layer-2:#2c2c2e;--dsw-alias-label-primary:#f9fafb;
+  --dsw-alias-label-secondary:#cfd3d6;--dsw-alias-label-tertiary:#adb2b8;
+  --dsw-alias-label-caption:#81858c;--dsw-alias-border-l1:#ffffff0f;
+  --dsw-alias-interactive-bg-hover:#ffffff14;--dsw-specific-menu:#43454a73;
+  --dsw-elevation-panel:0 0 0 .5px #ffffff0f,0 3px 8px 0 #00000014,0 0 16px 0 #0000000a;
+  --dsw-menu-backdrop-filter:none;
+  color-scheme:dark;
+}
+.stageDark{background:#151517;border-radius:12px;padding:16px;margin:-8px}
+.stageDark .label{color:#8a8f98}
+.stageDark .host,.stageDark .hostList,.stageDark .wrap{--dsw-alias-bg-layer-2:#2c2c2e}
+/* every dark stage gets the shipped dark chrome on its own subtree */
+[data-theme="dark"]{
+  --cmes-knob:${CHROME.dark.knob};
+  --cmes-dotPassed:${CHROME.dark.dotPassed};
+  --cmes-accent:${CHROME.dark.accent};
+  --cmes-accentPeak:${CHROME.dark.accentPeak};
+  --cmes-accentHalo:rgba(122,170,255,.20);
+  --cmes-warnHi:#c39bff;--cmes-warnLo:#f3e6ff;
+  --cmes-peakGradient:linear-gradient(90deg,#3e89ff 0%,#438bff 10%,#518dff 20%,#668bff 30%,#7c8aff 40%,#9386ff 50%,#a084ff 55%,#a785ff 60%,#b085ff 65%,#b087ff 70%,#af8bff 75%,#ae8fff 80%,#ae91ff 85%,#af95ff 93%,#b296fe 100%);
+  --dsw-elevation-stroke-color:rgba(176,133,255,.45);
+}
+</style>
 </head><body>
 <h1 style="font-size:15px;margin:0 0 4px">插件实渲染预览（client.js 的真实 CSS + 真实结构）</h1>
-<p style="font-size:12px;color:#707073;margin:0 0 22px;line-height:1.7;max-width:760px">
+<p style="font-size:12px;color:#707073;margin:0 0 22px;line-height:1.7;max-width:860px">
   CSS 与类名直接取自 <code>client.js</code> 的 <code>CSS</code> 模板，未做任何改写。此页只替换 React 运行时。<br>
-  ① 每档一色（填充 / 轨道 / 标题同步）&nbsp; ② 模型面板改为两级下钻（provider → 模型 + 搜索）&nbsp; ③ 闪电说明用 fixed 层不再被裁切
+  ① 每档一色（填充 / 轨道 / 标题同步）&nbsp; ② 模型面板两级下钻&nbsp; ③ <b>深色模式</b>：右列是深色主题下的同一组件——填充、轨道、标题 ink、旋钮与 Ultra 渐变全部换成按官方深色表面解出的色板
 </p>
 
 <div class="stage">
   <div class="col">
-    <div class="label">Effort pane · 全部 7 档（每档一色）</div>
-    ${EFFORTS.map((_, i) => `<div class="host">${effortPane(i)}</div>`).join('')}
-    <div class="label">Ultra 进入瞬间（警示态）</div>
-    <div class="host">${effortPane(6, { message: true })}</div>
+    <div class="label">浅色 · Effort pane · 全部 7 档（每档一色）</div>
+    ${EFFORTS.map((_, i) => `<div class="host">${effortPane(i, { theme: 'light' })}</div>`).join('')}
+    <div class="label">浅色 · Ultra 进入瞬间（警示态）</div>
+    <div class="host">${effortPane(6, { theme: 'light', message: true })}</div>
+  </div>
+  <div class="col stageDark">
+    <div class="label">深色 · Effort pane · 全部 7 档（每档一色）</div>
+    ${EFFORTS.map((_, i) => `<div class="host">${effortPane(i, { theme: 'dark' })}</div>`).join('')}
+    <div class="label">深色 · Ultra 进入瞬间（警示态）</div>
+    <div class="host">${effortPane(6, { theme: 'dark', message: true })}</div>
   </div>
   <div class="col">
     <div class="label">第一级 · 5 个 provider（蓝点标在行右侧标出当前模型所在组）</div>
@@ -260,12 +324,8 @@ const html = `<!DOCTYPE html>
     <div class="hostList">${modelsPane('zzz', 2, 'Trae')}</div>
     <div class="label">Trigger（收起态，同样带档位色）</div>
     <div class="wrap">${trigger(2)}${trigger(4)}${trigger(6)}</div>
-  </div>
-  <div class="col">
-    <div class="label">Fast 说明浮层（fixed 层，不被弹层裁切）</div>
-    <div class="host" style="height:150px">
-      ${effortPane(2).replace('class="' + P + '-tip"', 'class="' + P + '-tip" style="opacity:1;visibility:visible;left:60px;top:-4px"')}
-    </div>
+    <div class="label">Trigger · 深色（收起态）</div>
+    <div class="wrap stageDark" style="padding:12px">${trigger(2, 'dark')}${trigger(4, 'dark')}${trigger(6, 'dark')}</div>
   </div>
 </div>
 </body></html>`;

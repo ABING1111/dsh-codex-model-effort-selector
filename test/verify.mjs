@@ -201,6 +201,48 @@ check('measured palette is present', () => {
   }
 });
 
+check('dark theme is wired to the shipped signal and swaps every palette', () => {
+  // detection: the body attribute the shipped theme toggles, read reactively
+  assert.match(src, /hasAttribute\('data-ds-dark-theme'\)/, 'dark detection reads the body attribute');
+  assert.match(src, /useSyncExternalStore\(subscribeTheme, isDarkNow/, 'the flag is reactive');
+  assert.match(src, /attributeFilter: \['data-ds-dark-theme'\]/, 'the observer filters to that one attribute');
+  // palettes: both tables exist and every stamp site is theme-aware
+  for (const table of ['EFFORT_FILL_DARK', 'EFFORT_INK_DARK',
+    'FILL_FALLBACK_DARK', 'INK_FALLBACK_DARK', 'RAIL_BASE_DARK']) {
+    assert.ok(src.includes(`const ${table}`), `missing ${table}`);
+  }
+  for (const site of ['fillFor(displayed, dark)', 'inkFor(displayed, dark)', 'inkFor(savedEffort, dark)']) {
+    assert.ok(src.includes(site), `stamp site not theme-aware: ${site}`);
+  }
+  assert.match(src, /trackFor\(fillFor\(displayed, dark\), dark\)/, 'track is theme-aware');
+  // the light track base stays the measured one
+  assert.match(src, /RAIL_BASE_LIGHT = '#e8e7e8'/, 'light rail base is the measured value');
+  // the dark chrome block exists and pins the surfaces that CSS owns
+  assert.match(src, /body\[data-ds-dark-theme\] \.\$\{P\}-root\{/, 'dark chrome block present');
+  assert.match(src, /--\$\{P\}-knob:#f9fafb/, 'dark knob is a bright puck');
+  assert.match(src, /--\$\{P\}-dotPassed:#f9fafb/, 'dark passed ticks match the knob');
+  // the bug's shape: no theme-blind stamping may come back
+  assert.doesNotMatch(src, /fillFor\(displayed\)[,)]/, 'theme-blind fillFor must be gone');
+  assert.doesNotMatch(src, /inkFor\((displayed|savedEffort)\)[,)]/, 'theme-blind inkFor must be gone');
+  assert.doesNotMatch(src, /mixHex\('#e8e7e8'/, 'the track base must not be hardcoded at the call site');
+});
+
+check('REGRESSION: the v1.0.0 dark palette must never return', () => {
+  // Every light ink is too dark for a dark card; 'high' was the reported case
+  // (#4a3fc0 vs #2c2c2e = 1.83:1, near-invisible). Assert none of those hexes
+  // appear inside the dark ink table.
+  const darkBlock = src.match(/const EFFORT_INK_DARK = \{([\s\S]*?)\};/);
+  assert.ok(darkBlock, 'EFFORT_INK_DARK not found');
+  for (const bad of ['#707073', '#2b62bd', '#2f6fd0', '#3a55b8', '#4a3fc0', '#6a35c8', '#8b46ee']) {
+    assert.ok(!darkBlock[1].includes(bad), `dark ink reuses the light-mode ${bad}`);
+  }
+  // and the dark knob must not be the token that vanishes against the track
+  const css = src.match(/const CSS = `([\s\S]*?)`;/);
+  assert.ok(css, 'CSS not found');
+  assert.match(css[1], /--\$\{P\}-knob:#f9fafb/,
+    'the dark knob must override bg-layer-2 (#2c2c2e), which the #232324 track swallows');
+});
+
 check('no host hooks or events are registered (fail-open)', () => {
   assert.doesNotMatch(src, /ctx\.on\(/, 'must not emit/subscribe events');
   assert.doesNotMatch(src, /ctx\.plugin\(/, 'must not install plugins');
@@ -321,7 +363,7 @@ check('height uses real measured row heights (no clipping)', () => {
 /* ── the three latest reported issues ───────────────────────────────────── */
 
 check('ISSUE 1: the active provider is marked with a blue dot', () => {
-  assert.match(src, /\$\{P\}-rowDot\{[^}]*border-radius:50%;background:#3a83f7/, 'dot style');
+  assert.match(src, /\$\{P\}-rowDot\{[^}]*border-radius:50%;background:var\(--\$\{P\}-accent/, 'dot style');
   assert.match(src, /className: `\$\{P\}-rowDot`, hidden: !isCurrent/, 'dot only on the current provider');
   // keyed off the SELECTION, not off which provider is drilled into
   assert.match(src, /const isCurrent = selection\?\.provider === g\.id;/, 'keyed on selection');
