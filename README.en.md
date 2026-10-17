@@ -5,9 +5,9 @@
 > it replaces the compact model seat above the composer with a Codex-style
 > popover — one trigger, two panes.
 
-![version](https://img.shields.io/badge/version-1.1.1-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-1.1.2-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-107%20passing-brightgreen?style=flat-square)
+![tests](https://img.shields.io/badge/tests-108%20passing-brightgreen?style=flat-square)
 ![dsh](https://img.shields.io/badge/DSH-0.2.1--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 

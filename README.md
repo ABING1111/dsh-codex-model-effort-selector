@@ -4,9 +4,9 @@
 > **Codex 桌面版风格「模型 + 推理强度」选择器**：
 > 把输入框上那枚紧凑的模型席按钮，换成 Codex 风格的弹层 —— 一个入口，两块面板。
 
-![version](https://img.shields.io/badge/version-1.1.1-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-1.1.2-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-107%20passing-brightgreen?style=flat-square)
+![tests](https://img.shields.io/badge/tests-108%20passing-brightgreen?style=flat-square)
 ![dsh](https://img.shields.io/badge/DSH-0.2.1--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 
@@ -70,8 +70,9 @@ DSH 输入框上原本只有一枚很小的模型按钮。本插件用 `priority
 - **抵达最右端 · 粒子绽放**：滑条落到右端那一档的瞬间，旋钮炸开一圈粒子（柔光环 + 18 颗光点），
   0.6–0.9 秒扩散淡出。凡是「从别的档位落到右端」都会触发；打开弹层时本来就停在右端则不会
 - **Fast 开关**（⚡）：仅视觉效果，**不改变**实际速度或用量；悬停显示两行说明卡片
-  （`1.5 倍速` / `用量更多`，「仅视觉效果」保留给读屏器）
-- **重置**按钮：恢复模型默认档位
+  （`1.5 倍速` / `用量更多`，「仅视觉效果」保留给读屏器）。**开关按会话记住** ——
+  切换对话再切回来仍然是开，收起态也会带一颗 ⚡
+- **重置**按钮：恢复模型默认档位（同时关闭 Fast）
 
 #### Fast 开关的开 / 关对比
 

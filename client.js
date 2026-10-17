@@ -610,10 +610,49 @@ body[data-ds-dark-theme] .${P}-root{
       return out;
     }
 
+    /* ------------------------------------------------------------------ *
+     * Fast toggle — per-conversation persistence.
+     *
+     * The ⚡ toggle used to live only in component state. The seat is
+     * session-scoped, so switching conversations and coming back REMOUNTED the
+     * component and the toggle silently fell back to "off" ("选 Fast 后切走再
+     * 切回来又变回默认"). It is a per-conversation preference, so it is stored
+     * per session and restored on mount.
+     *
+     * Key shape follows the host's own convention
+     * (`dsh.conversation.<sessionId>`, `dsh.sidebar-right.v1`, …):
+     *   dsh.codex-effort-selector.fast.v1.<sessionId>
+     *
+     * Two layers on purpose:
+     *   - an in-memory mirror makes a switch inside one app run independent of
+     *     storage entirely (and keeps the fix working where storage is blocked);
+     *   - localStorage carries it across restarts.
+     * This plugin is fail-open, so every storage access is guarded: a failure
+     * only costs the restart, never the composer.
+     * ------------------------------------------------------------------ */
+    const FAST_STORE_PREFIX = 'dsh.codex-effort-selector.fast.v1.';
+    const fastMemory = new Map();
+    function readFast(sessionId) {
+      if (!sessionId) return false;
+      if (fastMemory.has(sessionId)) return fastMemory.get(sessionId);
+      try {
+        if (typeof localStorage === 'undefined') return false;
+        return localStorage.getItem(FAST_STORE_PREFIX + sessionId) === '1';
+      } catch { return false; }
+    }
+    function writeFast(sessionId, on) {
+      if (!sessionId) return;
+      fastMemory.set(sessionId, on);
+      try {
+        if (typeof localStorage === 'undefined') return;
+        localStorage.setItem(FAST_STORE_PREFIX + sessionId, on ? '1' : '0');
+      } catch { /* storage disabled — the in-memory mirror still holds it */ }
+    }
+
     /* ================================================================== *
      * Selector component
      * ================================================================== */
-    function Selector({ directory, load, select, available, locked, t, renderSlot }) {
+    function Selector({ directory, load, select, available, locked, t, renderSlot, sessionId }) {
       const state = useSyncExternalStore(
         fn => directory.subscribe(fn),
         () => directory.getSnapshot()
@@ -622,7 +661,9 @@ body[data-ds-dark-theme] .${P}-root{
       const [open, setOpen] = useState(false);
       const [present, setPresent] = useState(false);
       const [pane, setPane] = useState('effort');
-      const [fast, setFast] = useState(false);
+      /* Fast is restored from this session's stored preference on mount, so a
+       * conversation switch (which remounts the seat) no longer resets it. */
+      const [fast, setFastState] = useState(() => readFast(sessionId));
       const [preview, setPreview] = useState(null);
       const [hovered, setHovered] = useState(-1);
       const [dragging, setDragging] = useState(false);
@@ -664,6 +705,22 @@ body[data-ds-dark-theme] .${P}-root{
       /* The index the popover last showed, so the bloom fires on the ARRIVAL
        * transition only — not on every render that happens to sit at the end. */
       const seenIndexRef = useRef(null);
+      /* mirrors `fast` for the writer below, and remembers which session the
+       * mounted value belongs to (the seat may be reused across sessions) */
+      const fastRef = useRef(fast);
+      fastRef.current = fast;
+      const fastSessionRef = useRef(sessionId);
+
+      /* Every Fast change is written through, so it survives the remount that a
+       * conversation switch causes. Accepts a value or an updater, like the
+       * setState it wraps. */
+      const setFast = next => {
+        const value = typeof next === 'function' ? next(fastRef.current) : next;
+        if (value === fastRef.current) return;
+        fastRef.current = value;
+        setFastState(value);
+        writeFast(sessionId, value);
+      };
 
       /* ---------- derive catalog state ---------- */
       const selection = state.pending || state.current;
@@ -708,6 +765,18 @@ body[data-ds-dark-theme] .${P}-root{
 
       /* ---------- effects ---------- */
       useEffect(() => { if (available) load(); }, [available, load]);
+
+      /* If the host REUSES this component instance for another session (instead
+       * of remounting it), adopt that session's stored Fast preference. On a
+       * real remount the useState initializer already did it, and this effect
+       * sees no change. */
+      useEffect(() => {
+        if (fastSessionRef.current === sessionId) return;
+        fastSessionRef.current = sessionId;
+        const stored = readFast(sessionId);
+        fastRef.current = stored;
+        setFastState(stored);
+      }, [sessionId]);
 
       useLayoutEffect(() => {
         if (open) { setPresent(true); return; }
@@ -1541,6 +1610,9 @@ body[data-ds-dark-theme] .${P}-root{
             const available = ctx.sessions.subagentAddress(sessionId) === undefined;
             return {
               available,
+              /* the seat is session-scoped, so the Fast preference has to be
+               * keyed by this id to survive a conversation switch */
+              sessionId,
               directory: directory.store,
               load: () => { if (available) directory.load().catch(() => {}); },
               select: sel => (available ? directory.select(sel) : Promise.resolve(undefined))

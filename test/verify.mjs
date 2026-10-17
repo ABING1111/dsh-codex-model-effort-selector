@@ -139,7 +139,10 @@ check('owner-supplied props are not re-declared by inject()', () => {
   // so the business share must not shadow it with a constant.
   const api = registered.def.inject('session-1');
   assert.equal('locked' in api, false, 'locked must come from the owner, not inject');
-  assert.deepEqual(Object.keys(api).sort(), ['available', 'directory', 'load', 'select']);
+  assert.deepEqual(Object.keys(api).sort(), ['available', 'directory', 'load', 'select', 'sessionId']);
+  // the session id rides the injected face so per-session preferences can be
+  // keyed by it (the Fast toggle). It must be the id the host handed us.
+  assert.equal(api.sessionId, 'session-1', 'inject() forwards the session id');
 });
 
 check('dictionaries have identical key sets (zh/en)', () => {
@@ -492,6 +495,32 @@ check('the tooltip keeps the reference card shape and the disclosure stays reach
   // the "visual only" note is not deleted, only demoted to assistive tech
   assert.match(src, /h\('span', \{ className: `\$\{P\}-sr` \}, t\('visual'\)\)/, 'sr-only disclosure');
   assert.match(src, /'aria-describedby': 'cmes-fast-tip'/, 'button points at the tooltip');
+});
+
+/* ── the Fast toggle must survive a conversation switch ─────────────────── */
+
+check('NEW: the Fast toggle is remembered per conversation', () => {
+  // The seat is session-scoped, so switching conversations REMOUNTS the
+  // component. Component-only state therefore forgot the toggle: "选 Fast 后
+  // 切走再切回来又变回默认". It is stored per session and restored on mount.
+  assert.match(src, /const FAST_STORE_PREFIX = 'dsh\.codex-effort-selector\.fast\.v1\.';/,
+    'namespaced, versioned storage key (the host uses dsh.<area>.v1.<sessionId>)');
+  assert.match(src, /const \[fast, setFastState\] = useState\(\(\) => readFast\(sessionId\)\);/, 'restored on mount');
+  assert.match(src, /function readFast\(sessionId\)[\s\S]*?localStorage\.getItem\(FAST_STORE_PREFIX \+ sessionId\)/, 'read is per session');
+  assert.match(src, /function writeFast\(sessionId, on\)[\s\S]*?localStorage\.setItem\(FAST_STORE_PREFIX \+ sessionId/, 'write is per session');
+  // an in-memory mirror makes a switch inside one app run independent of storage
+  assert.match(src, /const fastMemory = new Map\(\);/, 'in-memory mirror');
+  assert.match(src, /if \(fastMemory\.has\(sessionId\)\) return fastMemory\.get\(sessionId\);/, 'mirror wins on read');
+  assert.match(src, /fastMemory\.set\(sessionId, on\);/, 'mirror written');
+  // every change is written through — including the reset button's setFast(false)
+  assert.match(src, /setFastState\(value\);\s*writeFast\(sessionId, value\);/, 'persisted on change');
+  assert.match(src, /typeof next === 'function' \? next\(fastRef\.current\) : next/, 'wraps the setState contract');
+  // if the host reuses the instance instead of remounting, adopt the new session
+  assert.match(src, /if \(fastSessionRef\.current === sessionId\) return;/, 'session switch re-reads');
+  // fail-open: a locked-down storage must never break the composer
+  assert.match(src, /catch \{ return false; \}/, 'read degrades to off');
+  assert.match(src, /catch \{ \/\* storage disabled/, 'write swallows failures');
+  assert.match(src, /if \(typeof localStorage === 'undefined'\) return false;/, 'guards for storage absence');
 });
 
 /* ── the far-right arrival bloom ────────────────────────────────────────── */
