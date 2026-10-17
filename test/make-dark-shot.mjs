@@ -1,10 +1,9 @@
 /**
- * Generate the README's dark-mode showcase from the plugin's REAL CSS.
+ * Generate the README's dark-mode shot from the plugin's REAL CSS.
  *
- * Single-theme (dark only) composition: a hero pane floating above a hint of
- * the composer, then every level rendered on its own card (the eighth cell is
- * the Ultra warning state). No comparison column — the light theme is
- * documented by the other shots.
+ * Landscape, single dark theme — laid out exactly like the other README shots
+ * (make-readme-shots.mjs): same header rhythm, same 11px uppercase labels,
+ * same 2x rendering — only the palette is the shipped dark theme.
  *
  * Usage:  node test/make-dark-shot.mjs   ->  docs/images/dark-mode.png
  */
@@ -47,6 +46,7 @@ const EFFORTS = [
   { id: 'xhigh', label: '极高', en: 'Extra High' },
   { id: 'max', label: 'Ultra', en: 'Ultra' }
 ];
+const idxOf = (id) => EFFORTS.findIndex((e) => e.id === id);
 
 /* ---------------------------------------------------------------- helpers -- */
 function mixHex(a, b, t) {
@@ -78,24 +78,25 @@ function sparkles(count = 22) {
 const TRACK = id => mixHex('#232324', FILL_DARK[id], 0.22);
 
 /* ------------------------------------------------------------- components -- */
-/** One full popover pane at a given level. */
-function pane(index, opts = {}) {
-  const e = EFFORTS[index];
-  const peak = e.id === 'max';
+/** One full popover pane at a given level (mirrors effortPane in make-readme-shots). */
+function effortPane(id, opts = {}) {
+  const e = EFFORTS[idxOf(id)];
+  const peak = id === 'max';
+  const index = idxOf(id);
   const pos = index / (EFFORTS.length - 1);
   const message = !!opts.message;
   const dots = EFFORTS.map((_, i) =>
     `<i class="${P}-dot${i <= index ? ' passed' : ''}" style="--${P}-tick:${i / (EFFORTS.length - 1)}"></i>`).join('');
   const title = (peak || message) ? '' : `<span class="${P}-heading">${e.label}${svg(I.chevron, '10px')}</span>`;
   return `
-  <div class="${P}-root" style="width:272px">
-  <div class="${P}-popover${peak ? ' peak' : ''}${message ? ' message' : ''}" style="--${P}-ink:${INK_DARK[e.id]}">
+  <div class="${P}-root">
+  <div class="${P}-popover${peak ? ' peak' : ''}${message ? ' message' : ''}" style="--${P}-ink:${INK_DARK[id]}">
     <div class="${P}-pane ${P}-main">
       <button class="${P}-tool ${P}-fast${opts.fast ? ' active' : ''}">${svg(I.bolt, '15px')}</button>
       <button class="${P}-modelLink">${title}<span class="${P}-modelName">${opts.model || '6 Astra'}</span></button>
       <div class="${P}-warning"><span>更快消耗使用额度</span></div>
       <button class="${P}-tool ${P}-reset">${svg(I.reset, '16px')}</button>
-      <div class="${P}-rail" style="--${P}-fill:${FILL_DARK[e.id]};--${P}-track:${TRACK(e.id)};--${P}-dot:var(--dsw-alias-label-caption,#b6b6b8);--${P}-pos:${pos}">
+      <div class="${P}-rail" style="--${P}-fill:${FILL_DARK[id]};--${P}-track:${TRACK(id)};--${P}-dot:var(--dsw-alias-label-caption,#b6b6b8);--${P}-pos:${pos}">
         <div class="${P}-fill"></div>${dots}
         <div class="${P}-sparks">${peak ? sparkles() : ''}</div>
         <div class="${P}-knob"></div>
@@ -104,103 +105,29 @@ function pane(index, opts = {}) {
   </div></div>`;
 }
 
-/** The collapsed trigger seat. */
-function trigger(index) {
-  const e = EFFORTS[index];
-  return `
-  <div class="${P}-root" style="display:inline-flex">
-  <button class="${P}-trigger${e.id === 'max' ? ' peak' : ''}" style="--${P}-ink:${INK_DARK[e.id]}">
+/** The collapsed trigger seat (same shape as make-readme-shots). */
+function trigger(id, opts = {}) {
+  const e = EFFORTS[idxOf(id)];
+  const bolt = opts.fast
+    ? `<svg class="${P}-bolt" viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:16px"><path d="${I.bolt}"/></svg>`
+    : '';
+  return `<div class="${P}-root" style="display:inline-flex">
+  <button class="${P}-trigger${id === 'max' ? ' peak' : ''}${opts.fast ? ' fast' : ''}" style="--${P}-ink:${INK_DARK[id]}">
+    ${bolt}
     <span class="${P}-caption">6 Astra <span class="${P}-triggerEffort">${e.label}</span></span>
     ${svg(I.down, '12px').replace('style="', `class="${P}-chev" style="`)}
   </button></div>`;
 }
 
-/* ------------------------------------------------------------------ layout -- */
-function hero() {
-  return `
-  <div class="hero">
-    <div class="composer">
-      <div class="heroHost">${pane(4, { fast: true })}</div>
-      <div class="seatRow">
-        ${trigger(4)}
-        ${trigger(6)}
-        ${trigger(0)}
-      </div>
-      <div class="seatHint">收起态 · 档位色跟随当前档</div>
-    </div>
-  </div>`;
-}
-
-/* 8 cells: the seven levels + the Ultra warning state. */
-function specimens() {
-  const card = (i, head, opts = {}) => `
-    <div class="cell">
-      <div class="cellHead">${head}</div>
-      <div class="cellBody">${pane(i, opts)}</div>
-    </div>`;
-  const head = (i, name, en) => `
-    <span class="swatch" style="background:${FILL_DARK[EFFORTS[i].id]}"></span>
-    <span class="cellName">${name}</span>
-    <span class="cellEn" style="color:${INK_DARK[EFFORTS[i].id]}">${en}</span>
-    <span class="cellHex">${FILL_DARK[EFFORTS[i].id]}</span>`;
-  const cells = EFFORTS.map((e, i) => card(i, head(i, e.label, e.en)));
-  cells.push(card(6, head(6, 'Ultra · 警示', 'Quota warning'), { message: true }));
-  return `
-  <div class="section">
-    <div class="sectionTitle">七档实渲染 + 警示态</div>
-    <div class="grid">${cells.join('')}</div>
-  </div>`;
-}
-
-const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
-<title>dark-mode</title>
-<style>${css}
-*{animation:none!important;transition:none!important}
-body{margin:0;background:#0c0c0e;color:#e9e9ec;
-  font-family:"Segoe UI Variable Text","Segoe UI",system-ui,"Microsoft YaHei",sans-serif;
-  -webkit-font-smoothing:antialiased}
-.canvas{width:720px;padding:36px 40px 34px;box-sizing:border-box;
-  background:
-    radial-gradient(620px 300px at 10% -8%, rgba(146,143,255,.14), transparent 62%),
-    radial-gradient(520px 280px at 94% 0%, rgba(189,145,255,.11), transparent 60%),
-    linear-gradient(180deg,#131316 0%,#0c0c0e 100%)}
-.masthead{display:flex;align-items:baseline;gap:12px;margin-bottom:24px}
-.mastheadTitle{font-size:19px;font-weight:600;letter-spacing:.01em}
-.mastheadSub{margin-left:auto;font-size:11px;color:#77787f}
-.mastheadRule{flex:1;height:.5px;background:rgba(255,255,255,.10);align-self:center}
-
-/* ---- hero: the popover floating above a hint of the composer ---- */
-.hero{display:flex;justify-content:center;margin:4px 0 26px}
-.composer{position:relative;width:340px;padding:18px 34px 14px;border-radius:16px;
-  background:#1b1b1f;
-  box-shadow:0 0 0 .5px rgba(255,255,255,.07),0 20px 48px rgba(0,0,0,.55)}
-.heroHost{position:relative;width:272px;height:104px;margin:0 auto}
-.heroHost .${P}-popover{position:absolute!important;bottom:auto!important;left:0!important;top:0!important}
-.seatRow{display:flex;gap:6px;justify-content:center;margin-top:12px}
-.seatHint{text-align:center;font-size:10.5px;color:#6f7076;margin-top:7px}
-
-/* ---- specimen grid ---- */
-.section{margin-bottom:4px}
-.sectionTitle{font-size:10.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
-  color:#8a8f98;margin:0 0 12px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.cell{border-radius:12px;padding:11px 12px 9px;background:#17171a;
-  box-shadow:0 0 0 .5px rgba(255,255,255,.055)}
-.cellHead{display:flex;align-items:center;gap:8px;margin-bottom:7px}
-.swatch{width:9px;height:9px;border-radius:3px;flex:none}
-.cellName{font-size:12.5px;font-weight:600;color:#e9e9ec}
-.cellEn{font-size:10.5px}
-.cellHex{margin-left:auto;font-size:9.5px;color:#6f7076;font-family:Consolas,monospace}
-/* each cell hosts its own fixed-positioned popover, pinned to the card */
-.cellBody{position:relative;width:272px;height:104px;margin:0 auto}
-.cellBody .${P}-popover{position:absolute!important;bottom:auto!important;left:0!important;top:0!important}
-
-/* shipped dark chrome, pinned for this standalone page (in the real client it
-   resolves from body[data-ds-dark-theme]) */
+/* ------------------------------- scaffolding (mirrors make-readme-shots) --- */
+const DARK_TOKENS = `
+/* shipped dark tokens — in the real client these resolve from
+   body[data-ds-dark-theme]; here they are pinned to the canvas */
 .canvas{
-  --dsw-alias-bg-layer-2:#2c2c2e;--dsw-alias-label-primary:#f9fafb;
-  --dsw-alias-label-secondary:#cfd3d6;--dsw-alias-label-tertiary:#adb2b8;
-  --dsw-alias-label-caption:#81858c;--dsw-alias-border-l1:#ffffff0f;
+  --dsw-alias-bg-layer-2:#2c2c2e;--dsw-alias-bg-layer-3:#353638;
+  --dsw-alias-label-primary:#f9fafb;--dsw-alias-label-secondary:#cfd3d6;
+  --dsw-alias-label-tertiary:#adb2b8;--dsw-alias-label-caption:#81858c;
+  --dsw-alias-border-l1:#ffffff0f;
   --dsw-alias-interactive-bg-hover:#ffffff14;--dsw-specific-menu:#43454a73;
   --dsw-elevation-panel:0 0 0 .5px #ffffff0f,0 3px 8px 0 #00000014,0 0 16px 0 #0000000a;
   --dsw-menu-backdrop-filter:none;
@@ -210,37 +137,76 @@ body{margin:0;background:#0c0c0e;color:#e9e9ec;
   --cmes-accent:#7aaaff;--cmes-accentPeak:#c39bff;--cmes-accentHalo:rgba(122,170,255,.20);
   --cmes-warnHi:#c39bff;--cmes-warnLo:#f3e6ff;
   --cmes-peakGradient:${PEAK_GRADIENT};
-  --dsw-elevation-stroke-color:rgba(176,133,255,.45)}
-</style></head><body>
-<div class="canvas">
-  <div class="masthead">
-    <span class="mastheadTitle">深色模式</span>
-    <span class="mastheadRule"></span>
-    <span class="mastheadSub">dsh-codex-model-effort-selector · v1.0.1</span>
+  --dsw-elevation-stroke-color:rgba(176,133,255,.45)}`;
+const HARNESS = `
+html,body{margin:0;padding:0}
+body{background:#0f0f12;font-family:var(--dsw-font-family,system-ui);-webkit-font-smoothing:antialiased}
+.canvas{position:relative;overflow:hidden;color:#f9fafb}
+.host{position:relative}
+.host .${P}-popover{position:absolute!important;bottom:auto!important;left:0!important;top:0!important}
+/* freeze animations so the screenshot is deterministic */
+.${P}-sp,.${P}-popover.peak .${P}-fill,.${P}-popover.peak .${P}-fill::before{animation-play-state:paused!important}`;
+
+/* same header rhythm as make-readme-shots: 19px/650 title at 44/32,
+   13px subtitle at 44/62, content row from top:112 */
+const page = (title, subtitle, body, w, h) => `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>${title}</title>
+<style>${css}${DARK_TOKENS}${HARNESS}
+.canvas{width:${w}px;height:${h}px}
+.label{font-size:11px;font-weight:700;letter-spacing:.1em;color:#8a8f98;margin-bottom:8px}
+</style></head>
+<body><div class="canvas">
+  <div style="position:absolute;inset:0;background:
+      radial-gradient(900px 460px at 8% -12%, rgba(146,143,255,.12) 0%, transparent 58%),
+      radial-gradient(820px 520px at 99% 108%, rgba(189,145,255,.10) 0%, transparent 60%),
+      linear-gradient(180deg,#17171a 0%,#0f0f12 100%)"></div>
+  <div style="position:absolute;left:44px;top:32px;font-size:19px;font-weight:650;color:#f9fafb">${title}</div>
+  <div style="position:absolute;left:44px;top:62px;font-size:13px;color:#a5a9b1">${subtitle}</div>
+  ${body}
+</div></body></html>`;
+
+const W = 1180, H = 620;
+const html = page(
+  '深色模式 · 每档一色',
+  '同一份 CSS 在官方深色表面下重新求解：主题判定读 body[data-ds-dark-theme]，切换即时变色，浅色主题逐位未动',
+  `
+  <div style="position:absolute;left:44px;top:112px;display:flex;flex-wrap:wrap;gap:22px 26px">
+    ${EFFORTS.map((e) => `
+      <div>
+        <div class="label">${e.label.toUpperCase()} · <code style="font-family:ui-monospace,Consolas,monospace;text-transform:none;color:${FILL_DARK[e.id]}">${FILL_DARK[e.id]}</code></div>
+        <div class="host" style="width:272px;height:104px">${effortPane(e.id)}</div>
+      </div>`).join('')}
+    <div>
+      <div class="label">ULTRA · 警示</div>
+      <div class="host" style="width:272px;height:104px">${effortPane('max', { message: true })}</div>
+    </div>
+    <div>
+      <div class="label">收起态</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;width:272px;min-height:104px">
+        ${trigger('high', { fast: true })}${trigger('max')}${trigger('off')}
+      </div>
+    </div>
   </div>
-  ${hero()}
-  ${specimens()}
-</div>
-</body></html>`;
+  `, W, H);
 
 writeFileSync(join(OUT, 'dark-mode.html'), html, 'utf8');
 
 /* ---------- screenshot ---------- */
-const BROWSERS = [
+const CANDIDATES = [
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
 ];
-const browser = BROWSERS.find(b => existsSync(b));
+const browser = CANDIDATES.find(b => existsSync(b));
 const png = join(OUT, 'dark-mode.png');
 if (!browser) {
   console.log('no browser found — wrote dark-mode.html only');
 } else {
   execFileSync(browser, [
     '--headless=new', '--disable-gpu', '--hide-scrollbars', '--force-device-scale-factor=2',
-    `--screenshot=${png}`, '--window-size=720,992', '--default-background-color=00000000',
+    `--screenshot=${png}`, `--window-size=${W},${H}`,
     'file:///' + join(OUT, 'dark-mode.html').replace(/\\/g, '/')
-  ], { stdio: 'ignore' });
-  console.log('wrote', png);
+  ], { stdio: 'ignore', timeout: 60000 });
+  console.log(`wrote docs/images/dark-mode.png (${W}x${H} @2x, ${readFileSync(png).length} bytes)`);
 }

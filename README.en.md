@@ -26,7 +26,6 @@
 
 - [What it is](#what-it-is)
 - [Features](#features)
-  - [Dark mode](#dark-mode)
 - [Install](#install)
 - [Usage](#usage)
 - [Compatibility & known limitations](#compatibility--known-limitations)
@@ -121,12 +120,11 @@ real speed or usage.
 
 ### Dark mode
 
-![Dark mode showcase](docs/images/dark-mode.png)
+![Dark mode: one colour per stop](docs/images/dark-mode.png)
 
-The whole image is a headless render of the **same real CSS** in the dark theme: the popover
-floating above the composer with the collapsed seats, then eight cards — the seven levels live
-(each recolouring its fill, track and heading ink together) plus the Ultra warning state. In the
-dark theme **the entire palette is re-solved against the shipped dark surfaces**:
+Same layout, same real CSS as the other shots — rendered on the shipped dark surfaces: the
+seven levels live, the Ultra warning state and the collapsed seats. In the dark theme
+**the entire palette is re-solved against the shipped dark surfaces**:
 
 - **Theme detection reads the official signal**: the `data-ds-dark-theme` attribute on `<body>`
   (set by the official theme boot script; every shipped dark token keys off that same selector).
