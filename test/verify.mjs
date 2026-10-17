@@ -522,6 +522,21 @@ check('FIX: reset works for providers that declare no default effort', () => {
   assert.match(src, /disabled: busy \|\| efforts\.length === 0/, 'honest disabled state');
 });
 
+/* ── a long model name must not swallow the level label ─────────────────── */
+
+check('FIX: a long model name truncates instead of hiding the level', () => {
+  // The name and the level used to share ONE truncating box, so a long name —
+  // and Fast on, which spends another ~21px on the ⚡ — pushed the level past
+  // the ellipsis and the level vanished from the collapsed seat.
+  assert.match(src, /\.\$\{P\}-caption\{flex:0 1 auto;/, 'the caption is the shrinking item');
+  assert.match(src, /\.\$\{P\}-triggerEffort\{flex:none;/, 'the level never shrinks');
+  // structurally: the level span is a SIBLING of the caption, not a child of it
+  assert.match(src, /: modelName\),\s*triggerLabel\s*\? h\('span', \{ className: `\$\{P\}-triggerEffort` \}, triggerLabel\)/,
+    'the level is rendered outside the truncating box');
+  // the old in-caption form (with its leading space) must be gone
+  assert.doesNotMatch(src, /` \$\{triggerLabel\}`/, 'no level text inside the caption');
+});
+
 /* ── the Fast toggle must survive a conversation switch ─────────────────── */
 
 check('NEW: the Fast toggle is remembered per conversation', () => {
@@ -636,7 +651,7 @@ check('0.2.1: the seat declares its label child slot and renders it', () => {
   assert.match(src, /placement: 'trigger'/, 'trigger placement');
   assert.match(src, /placement: 'option'/, 'option placement');
   // a 0.2.0 host hands out no renderSlot; the plain name must still render
-  assert.match(src, /: modelName,/, 'plain-name fallback kept');
+  assert.match(src, /: modelName\)/, 'plain-name fallback kept');
 });
 
 // --- report ---------------------------------------------------------------

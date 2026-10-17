@@ -205,7 +205,8 @@ function trigger(id, model = '6 Astra', opts = {}) {
   return `<div class="${P}-root" style="display:inline-flex">
   <button class="${P}-trigger${id === 'max' ? ' peak' : ''}${fast ? ' fast' : ''}" style="--${P}-ink:${INK[id]}">
     ${bolt}
-    <span class="${P}-caption">${model} <span class="${P}-triggerEffort">${e.label}</span></span>
+    <span class="${P}-caption">${model}</span>
+    <span class="${P}-triggerEffort">${e.label}</span>
     ${svg(ICON.down, '12px').replace('style="', `class="${P}-chev" style="`)}
   </button></div>`;
 }

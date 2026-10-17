@@ -285,7 +285,8 @@ function trigger(effortIdx, theme = 'light') {
   return `
   <div class="${P}-root" style="display:inline-flex" data-theme="${theme}">
   <button class="${P}-trigger${e.id === 'max' ? ' peak' : ''}" style="--${P}-ink:${ink}">
-    <span class="${P}-caption">6 Astra <span class="${P}-triggerEffort">${e.label}</span></span>
+    <span class="${P}-caption">6 Astra</span>
+    <span class="${P}-triggerEffort">${e.label}</span>
     ${svg(I.down, '12px').replace('style="', `class="${P}-chev" style="`)}
   </button></div>`;
 }

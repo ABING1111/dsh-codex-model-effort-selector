@@ -278,8 +278,12 @@ window.__ModuleLoader__.load({
 .${P}-bolt{width:14px;height:16px;flex:none;color:var(--dsw-alias-label-primary);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round}
 .${P}-trigger.fast .${P}-bolt{fill:currentColor;stroke-width:.7}
 .${P}-iconSmall{width:14px;height:14px;flex:none}
-.${P}-caption{display:var(--dsh-composer-model-text-display,inline);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.${P}-triggerEffort{color:var(--${P}-ink,var(--dsw-alias-label-caption));transition:color .2s ease}
+/* The caption is the ONLY part allowed to shrink: the model name truncates with
+   an ellipsis while the level keeps its (two) characters. They used to share one
+   truncating box, so with a long model name — and with Fast on, which costs
+   another ~21px for the ⚡ — the level slid past the ellipsis and disappeared. */
+.${P}-caption{flex:0 1 auto;display:var(--dsh-composer-model-text-display,inline);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.${P}-triggerEffort{flex:none;display:var(--dsh-composer-model-text-display,inline);white-space:nowrap;color:var(--${P}-ink,var(--dsw-alias-label-caption));transition:color .2s ease}
 .${P}-compact{display:var(--dsh-composer-model-icon-display,none)}
 .${P}-chev{width:12px;height:12px;flex:none;color:var(--dsw-alias-label-caption);transition:transform .12s ease}
 .${P}-trigger[aria-expanded=true] .${P}-chev{transform:rotate(180deg)}
@@ -1553,6 +1557,14 @@ body[data-ds-dark-theme] .${P}-root{
         },
           fast ? h('svg', { className: `${P}-bolt`, viewBox: '0 0 24 24', 'aria-hidden': true }, h('path', { d: ICON.bolt })) : null,
           h('span', { className: `${P}-compact` }, icon('model')),
+          /* The model name and the effort are SEPARATE flex children on purpose.
+           * They used to share one truncating box, so a long model name — and
+           * turning Fast on costs another ~21px of width for the ⚡ — pushed the
+           * level label past the ellipsis and it vanished entirely. Splitting
+           * them lets the NAME be the part that truncates while the level stays
+           * legible: it is two characters, and it is the thing the user came to
+           * read. `--dsh-composer-model-text-display` still hides both together
+           * in the host's icon-only compact mode. */
           h('span', { className: `${P}-caption` },
             /* DSH 0.2.1-rc.2 gives the seat a child slot,
              * `conversation.input.model.label`, for inline label decoration
@@ -1567,8 +1579,10 @@ body[data-ds-dark-theme] .${P}-root{
                   provider: { id: group?.id, name: group?.name },
                   model, placement: 'trigger', selected: true
                 }, { fallback: modelName })
-              : modelName,
-            triggerLabel ? h('span', { className: `${P}-triggerEffort` }, ` ${triggerLabel}`) : null),
+              : modelName),
+          triggerLabel
+            ? h('span', { className: `${P}-triggerEffort` }, triggerLabel)
+            : null,
           icon('down', `${P}-chev`)),
 
         h('section', {

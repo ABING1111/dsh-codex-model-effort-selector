@@ -6,7 +6,7 @@
 
 ![version](https://img.shields.io/badge/version-1.1.2-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-109%20passing-brightgreen?style=flat-square)
+![tests](https://img.shields.io/badge/tests-110%20passing-brightgreen?style=flat-square)
 ![dsh](https://img.shields.io/badge/DSH-0.2.1--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 
@@ -189,8 +189,10 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 **收起态**（输入框右侧，就一颗按钮，同样带档位色）：
 
 ```
-[ ⚡ 6 Astra  Ultra  ⌄ ]
+[ ⚡ DeepSeek-V4.1-Pro-Expe…  高  ⌄ ]
 ```
+
+> 名字过长时**只省略模型名**，档位标签始终完整显示（Fast 打开多占一个 ⚡ 也一样）。
 
 **点开**后：
 
