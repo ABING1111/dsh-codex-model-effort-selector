@@ -4,10 +4,10 @@
 > **Codex 桌面版风格「模型 + 推理强度」选择器**：
 > 把输入框上那枚紧凑的模型席按钮，换成 Codex 风格的弹层 —— 一个入口，两块面板。
 
-![version](https://img.shields.io/badge/version-1.0.1-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-1.1.1-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-93%20passing-brightgreen?style=flat-square)
-![dsh](https://img.shields.io/badge/DSH-0.2.0--rc.2-5b6ef5?style=flat-square)
+![tests](https://img.shields.io/badge/tests-107%20passing-brightgreen?style=flat-square)
+![dsh](https://img.shields.io/badge/DSH-0.2.1--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 
 ![插件实渲染预览](docs/images/hero.png)
@@ -61,10 +61,16 @@ DSH 输入框上原本只有一枚很小的模型按钮。本插件用 `priority
   Codex 阶梯最多 7 档：`关闭 → 极低 → 轻度 → 中 → 高 → 极高 → Ultra`
 - **每档一色**：填充、轨道底色、标题文字、收起态按钮**同步换色** ——
   色相从蓝 `216.6°` 单调推进到紫罗兰 `263.9°`，而不是只有 Ultra 特殊
-- **拖动实时跟手**：拖动中旋钮连续跟指针（**不吸附**），松手才吸附到最近档
+- **拖动实时跟手**：拖动中旋钮连续跟指针（**不吸附**），松手才吸附到最近档。
+  手势由 document 持有（不是指针捕获），拖到弹层外面再拖回来也不会中断
+- **按压 / 释放形变**：按住旋钮会放大到 1.16 倍，松手沿回弹曲线弹回；**不加光环、不改阴影**，
+  只缩放 `transform`，旋钮的布局盒不动，跟手计算不受影响
 - **键盘**：`←/→` 或 `↑/↓` 移动一档，`Home`/`End` 到两端
 - **Ultra 档**：轨道切换为紫罗兰流动渐变 + 22 颗星尘粒子，并显示「更快消耗使用额度」警示（1.8 秒）
-- **Fast 开关**（⚡）：仅视觉效果，**不改变**实际速度或用量
+- **抵达最右端 · 粒子绽放**：滑条落到右端那一档的瞬间，旋钮炸开一圈粒子（柔光环 + 18 颗光点），
+  0.6–0.9 秒扩散淡出。凡是「从别的档位落到右端」都会触发；打开弹层时本来就停在右端则不会
+- **Fast 开关**（⚡）：仅视觉效果，**不改变**实际速度或用量；悬停显示两行说明卡片
+  （`1.5 倍速` / `用量更多`，「仅视觉效果」保留给读屏器）
 - **重置**按钮：恢复模型默认档位
 
 #### Fast 开关的开 / 关对比
@@ -94,12 +100,18 @@ DSH 输入框上原本只有一枚很小的模型按钮。本插件用 `priority
 
 ![Fast 浮层与 Ultra 警示](docs/images/details.png)
 
-- **Fast 说明浮层用 `position:fixed`**：它是弹层的子元素，若留在流内会被 `overflow:hidden` 裁掉，
-  所以改成固定层并动态定位
+- **Fast 说明浮层必须渲染在弹层之外**：弹层要画官方菜单材质（`backdrop-filter`），
+  而**非 `none` 的 `backdrop-filter` 会让弹层成为 `position:fixed` 子元素的包含块** ——
+  浮层若还挂在弹层里，视口坐标会被当成相对弹层的坐标解释，再被 `overflow:hidden` 裁掉，
+  表现就是「悬停完全没反应」。所以它是弹层的**兄弟节点**，显隐由 `pointerenter/leave` + `focus/blur` 驱动
 - **Ultra 警示的时序**：**从非 Ultra 档进入 Ultra 的那一刻**，中列与左右两个工具按钮一起淡出、
   警示文字淡入并走一次扫光（1.1s，延迟 0.2s），**持续 1.8 秒**后自动淡回档位标题。
   也就是说警示是**立刻出现**、而不是等 1.8 秒才出现；
   期间停留在 Ultra 不会重复触发，一旦离开 Ultra 则**立即**恢复（不必等满 1.8 秒）
+- **右端的旋钮是唯一抓手**：旋钮 30px、轨道 26px，旋钮上下各多出 2px。那 2px 若不可命中，
+  按上去命中的就是面板、拖不动 —— 所以轨道上下各加了一条透明抓取带，把悬出部分一起纳入命中范围
+- **拖动不能被「半路打断」**：旋钮保持 `pointer-events:none`，整段手势始终落在同一个目标（轨道）上；
+  即使指针捕获被丢掉，document 捕获阶段的监听仍在驱动滑条，不会出现「按住到一半变成无法选中」
 
 ### 深色模式
 
@@ -197,13 +209,16 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 
 | 项 | 说明 |
 |---|---|
-| DSH | 已在 **DSH Desktop 0.2.0-rc.2（Windows）** 实机验证 |
+| DSH | 已在 **DSH Desktop 0.2.1-rc.2（Windows）** 实机验证；`0.2.0-rc.2` 仍可用（`renderSlot` 缺失时回退） |
 | 运行时依赖 | **无**（`client.js` 手写，零构建、零第三方代码） |
 | 主题 | 跟随 DSH 主题令牌（`--dsw-*`），令牌缺失时回退到中性灰 + `#4d93f8` 蓝 |
 | 平台 | Windows 实机验证；其余平台未测 |
 
 - **需要重启** DSH Desktop 才生效（客户端 bundle 在启动时注入）
 - **依赖官方 slot 契约**：官方若改动 `conversation.input.model` 的形状，本插件会**静默退回**「什么都不做」，不会破坏官方界面
+- **0.2.1 起席位要声明子槽位**：`conversation.input.model.label` 只在**声明它的条目挂载期间**存在，
+  官方模型列表与「1017」徽标都往它注册。本插件遮蔽席位时**同样声明并渲染**该子槽位，
+  否则那些装饰会在无报错的情况下消失
 - **官方模型菜单没有入口了**：那颗席按钮是官方菜单的唯一入口，被遮蔽后打不开；切模型仍有本插件面板与官方 **`/model` 命令**两条路
 - **档位由模型决定**：滑条只显示当前模型实际公布的推理强度；模型没有推理元数据时显示「此模型未提供推理强度」
 - **Ultra 命名**：`max` 档在 Codex 里叫 Ultra，本插件沿用该命名；若某模型把最高档命名为别的 id，则显示模型自己的名字
@@ -219,7 +234,7 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 # 语法检查
 node --check client.js
 
-# 离线断言套件（35 项：加载 / 注册契约 / 遮蔽 / 几何 / 配色 / 主题接线 / fail-open / 无障碍 / 两级下钻）
+# 离线断言套件（43 项：加载 / 注册契约 / 遮蔽 / 几何 / 配色 / 主题接线 / fail-open / 无障碍 / 两级下钻 / 悬浮窗 / 绽放 / 形变 / 抓手 / 0.2.1 子槽位）
 node test/verify.mjs
 
 # 配色断言（24 项：浅色 + 深色各过一遍三条 WCAG 下限 + 色相单调 + 色度 + 去重）
@@ -228,7 +243,7 @@ node test/palette.mjs
 # 折叠 bug 回归（6 项：同时跑有 bug 与修好后的两个状态机）
 node test/collapse-regression.mjs
 
-# 对着真实 SlotCore 的集成测试（4 项；找不到 DSH 安装时自动跳过）
+# 对着真实 DSH 的集成测试（9 项；0.2.1 对着随包源码断言子槽位契约，找不到 DSH 安装时自动跳过）
 node test/slots-integration.mjs
 # 自定义 DSH 安装位置：设置 DSH_ASAR 或 DSH_RESOURCES 环境变量
 

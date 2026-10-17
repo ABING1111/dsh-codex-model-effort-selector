@@ -15,6 +15,269 @@
 | 9 | 滑条能停在任意位置 | React 因状态未变而跳过重渲染，吸附值从未写回 | `verify.mjs` |
 | 10 | 第一级每行右侧的灰色模型名是冗余的 | 第二级已经列出并标勾选 | `verify.mjs` |
 | 11 | 蓝点在 provider 名左侧，与「状态在右」的阅读习惯相反 | 渲染顺序是 name → dot → chevron | `verify.mjs` |
+| 4b | ⚡ 浮层**悬停完全不显示**（4 的修法没生效） | 弹层的 `backdrop-filter` 使弹层成为 fixed 子元素的包含块，视口坐标被当成相对弹层解释后裁掉 | `verify.mjs` ×3 |
+| 13 | 滑条在最右端时**按住拖不动** | 旋钮 30px / 轨道 26px，旋钮上下 2px 悬空且不可命中，按下落到面板上 | `verify.mjs` |
+| 14 | 无坐标的释放把旋钮甩出轨道 | `nearestIndex(NaN)` → `--pos: NaN` 使 `left:calc()` 非法 | `verify.mjs` |
+| 15 | 悬停刻度点不高亮 | 把**事件对象**当 `clientX` 传入，映射恒为 `NaN` | `verify.mjs` |
+| 16 | 升级 0.2.1 后模型名上的「1017」徽标消失 | 子槽位 `conversation.input.model.label` 只在声明它的条目挂载期间存在 | `slots-integration.mjs` |
+| 17 | 拖动到一半「变成无法选中」 | 手势依赖指针捕获，捕获一丢就再也收不到 `pointermove`；旋钮可命中又让事件目标一直变 | `verify.mjs` |
+| 18 | 按住时的柔光环（按需求去掉） | 设计变更：按压只保留放大 | `verify.mjs` |
+
+---
+
+## 第 4b 条 · ⚡ 浮层悬停完全不显示（第 4 条并未真正修好）
+
+### 现象
+
+悬停 ⚡ 按钮，**什么也不出现**。不是「被裁掉一部分」，而是**整块看不到**。
+
+### 根因
+
+第 4 条把浮层改成 `position:fixed`，假设这样就能逃出弹层的 `overflow:hidden`。**这个假设不成立**，
+因为弹层还画了官方菜单材质：
+
+```css
+.${P}-popover{ ... backdrop-filter:var(--dsw-menu-backdrop-filter); overflow:hidden }
+/* 主题令牌实测值： blur(40px) saturate(150%) */
+```
+
+按 CSS 规范，**非 `none` 的 `backdrop-filter`（以及 `transform` / `filter` / `contain` / `will-change`）
+会让该元素成为其后代的包含块**。于是浮层的 `position:fixed` 不再是相对视口，而是相对弹层的 padding box；
+`positionTip()` 算出的视口坐标被原样当作「相对弹层」的坐标使用。真实浏览器实测：
+
+```
+想放在  top = 479            （= 按钮 top 551 − 浮层高 66 − 6）
+实际落在  top = 1023          （= 弹层 top 544 + 479）
+```
+
+随后 `overflow:hidden` 把它整块裁掉。悬停其实**成功**把 `opacity` 置成了 1、`visibility` 置成了 `visible` ——
+只是没有任何东西被画出来，所以从「看不出 hover 生效」推断成「hover 没触发」是错的。
+
+### 修法
+
+把浮层从弹层里**搬出去**，渲染成弹层的**兄弟节点**（仍在 `.cmes-root` 内）：
+
+```
+<div class="cmes-root">
+  <button class="cmes-trigger">…</button>
+  <section class="cmes-popover">… ⚡（不再包含浮层） …</section>
+  <span role="tooltip" class="cmes-tip show">…</span>   ← 在这里
+</div>
+```
+
+`.cmes-root` 上没有任何 transform / filter / backdrop-filter，`position:fixed` 重新相对视口生效
+（探针实测：同一个 fixed 盒子放在弹层里报 `12,544`，放在 root 里报 `0,0`）。
+因为它不再是按钮的后代，原来的 `.cmes-fast:hover [role=tooltip]` **本来就无法命中**，
+所以显隐改为 `pointerenter/leave` + `focus/blur` 驱动的 `.show` 类。
+
+顺带修掉第二个隐患：定位原本在 hover 回调里做，**首次悬停时浮层还没参与过布局**，
+`offsetWidth/offsetHeight` 走的是占位值，于是它按错尺寸被摆放。改为 `useLayoutEffect` 在布局后定位。
+
+### 断言
+
+- 根因的两半仍在源码里（弹层确实有 `backdrop-filter` 与 `overflow:hidden`），而旧的 `:hover` 后代规则**必须消失**
+- 浮层节点必须渲染在 `h('section'` **之后**，且全文件只有一个 `role: 'tooltip'`
+- 显隐是 `.show` 状态类；定位在布局效应里做且读取真实 `offsetHeight`
+- 浮层随弹层关闭、随面板切换收起
+
+---
+
+## 第 13 条 · 滑条在最右端时按住拖不动
+
+### 现象
+
+滑条已经在最右端时，按住旋钮往左拖，**偶尔完全不动**；换个位置按又能拖。最右端最容易复现。
+
+### 根因
+
+旋钮可见直径 **30px**，轨道高度只有 **26px**，所以旋钮上下各有 **2px** 悬在轨道外；
+而旋钮当时是 `pointer-events:none`。在悬出来的那 2px 上按下，命中测试落在**面板**上，
+`pointerdown` 从未到达轨道 —— 手势根本没开始。真实浏览器逐点实测（右端、按住后左移 60px）：
+
+```
+STUCK   knob top edge          pos 1 -> 1   hit=cmes-pane cmes-main
+STUCK   knob bottom edge       pos 1 -> 1   hit=cmes-pane cmes-main
+SLIDES  knob centre            pos 1 -> 0.33 hit=cmes-rail
+```
+
+右端之所以最容易中招：轨道右端的填充已经铺满，旋钮就是那一段**唯一的抓手**，指尖稍偏就落在死区。
+
+### 修法
+
+1.1.0 先试过「让旋钮可命中 + 加抓取带」两层。**前者是错的**，见第 17 条：旋钮一旦可命中，
+拖动时它会从光标下面移走，事件目标就跟着变，反而制造了新的中断。
+
+最终形态只有一条：把命中范围**长在轨道自己身上**。
+
+```
+.cmes-rail::before{content:"";position:absolute;inset:-6px -3px;border-radius:20px}
+```
+
+抓取带是轨道的盒，命中测试返回轨道本身；它上下各覆盖 6px，把旋钮悬出的 2px 完全包住。
+旋钮保持 `pointer-events:none` —— 于是**整段手势始终落在同一个目标（轨道）上**。
+
+### 断言
+
+抓取带存在、`pointer-events:none` 仍在旋钮上、`nearestIndex` 对非有限数有保护。
+浏览器逐点复测右端 8 个抓取点（旋钮中心 / 上下边缘 / 轨道上下悬出 / 轨道右边缘 / 旋钮右边缘 /
+轨道左侧）全部可拖，且命中目标全部是 `cmes-rail`。
+
+---
+
+## 第 14 条 · 无坐标的释放把旋钮甩出轨道
+
+### 现象
+
+（潜在缺陷）某些释放路径下旋钮会瞬间跳到轨道外面。
+
+### 根因
+
+`finish()` 用 `nearestIndex(event ? event.clientX : NaN)`。没有坐标时 `NaN` 一路穿过
+`fractionAt` → `nearestIndex` → `stopFraction` → `--${P}-pos: NaN`，
+而 `left:calc((100% - 30px)*NaN)` 是**非法值**，声明被丢弃，旋钮退回 `left:auto`。
+第 13 条的窗口级兜底正好会调用「无事件」的 `finish()`，所以这条必须先修。
+
+### 修法
+
+无坐标时解析到**当前档位**（`known ? nearestIndex(event.clientX) : index`），
+`nearestIndex` 也加了 `Number.isFinite` 保护。
+
+### 断言
+
+`finish` 里有 `Number.isFinite(event.clientX)`、回落表达式、且**去掉注释后**函数体里不再出现 `NaN`。
+
+---
+
+## 第 15 条 · 悬停刻度点不高亮
+
+### 现象
+
+（潜在缺陷）指针掠过某个刻度点时，本该放大的刻度点毫无反应。
+
+### 根因
+
+`pointerMove` 的非拖动分支把**事件对象**传给了只接受坐标的函数：
+
+```js
+const i = nearestIndex(event);        // 应该是 event.clientX
+```
+
+`(eventObj - box.left - 15)` 是 `NaN`，于是 `tickX` 是 `NaN`、比较恒假，`setHovered(-1)` 永远成立。
+
+### 修法
+
+改传 `event.clientX`。
+
+### 断言
+
+源码里存在 `nearestIndex(event.clientX)`，且**不存在** `nearestIndex(event)`。
+
+---
+
+## 第 16 条 · 升级 0.2.1 后模型名上的徽标消失
+
+### 现象
+
+DSH 从 `0.2.0-rc.2` 升到 `0.2.1-rc.2` 后，被装饰过的模型名（如内置「1017」徽标）不再出现，
+**控制台没有任何报错**。
+
+### 根因
+
+0.2.1 的席位条目要**声明自己的子槽位**，而且子槽位只在**声明它的那一条挂载期间**存在：
+
+```js
+// 官方 dsh-client-ui-model-selection：
+scope.slots.register({
+  name: 'conversation.input.model',
+  children: { 'conversation.input.model.label': { kind:'single', scope:'session', inline:true } },
+  inject: …
+}, ModelSelect);
+```
+
+内置 `dsh-client-ui-deepseek-model-label-1017` 通过 `ctx.slots.inject('conversation.input.model.label', …)`
+往这个子槽位注册。本插件以 `priority:-1` 遮蔽了父席位却没声明子槽位 → 子槽位不存在 →
+`slots.inject` 的回调**永远不会被调用**，装饰静默消失。
+
+### 修法
+
+遮蔽时**声明同样的子槽位**（`{kind:'single', scope:'session', inline:true}`），并把它**渲染出来**
+（trigger 用 `placement:'trigger'`、模型行用 `placement:'option'`，无贡献时回退到目录模型名）。
+声明 children 后渲染器才会把 `renderSlot` 注入组件；0.2.0 没有这个绑定，调用处做了条件化。
+
+### 断言
+
+`test/slots-integration.mjs` 从随包发布的官方源码里**读出**官方声明的子槽位集合，
+与本插件声明的集合逐一比对，并核对 `kind/scope/inline` 三元组与两处 `renderSlot` 调用；
+0.2.1 不再单独发布 `@deepseek-ai/dsh-client-ui-slots`，因此「实例化真实 SlotCore」的两条断言自动 skip，
+只有在仍能读到该包的环境里才执行。
+
+---
+
+## 第 17 条 · 拖动到一半「变成无法选中」
+
+### 现象
+
+按住旋钮拖动，拖到中途滑条突然不再跟手、松手也不提交，看起来像「从按住状态掉成了无法选中」。
+1.1.0 修完第 13 条后**反而更频繁**，而且**任意位置**都可能出现。
+
+### 根因
+
+两个原因叠加，第二个是 1.1.0 自己引入的。
+
+1. **手势的所有权押在了指针捕获上。** 代码在 `pointerdown` 里 `setPointerCapture`，之后靠轨道上的
+   `onPointerMove` 跟手。可捕获并不牢靠：捕获元素被替换、按下触发**原生拖拽或文字选择**、
+   指针移出窗口、浏览器决定接管手势 —— 都会派发 `pointercancel` / `lostpointercapture`。
+   一旦如此，轨道再也收不到 `pointermove`，拖动**当场卡死**；而 `lostpointercapture`
+   当时被显式忽略（"capture loss is not a cancel"），于是既不结算也不跟手。
+2. **1.1.0 把旋钮改成了可命中元素。** 拖动时旋钮会跟着数值**从光标下面移走**，
+   于是指针下的元素在「旋钮 / 填充 / 轨道 / 面板」之间不断切换。捕获正常时看不出问题，
+   一旦捕获丢失（原因见上），事件就落到别的元素上 —— 这正是「任意位置都会断」的来源。
+
+### 修法
+
+把手势的**所有权从「轨道 + 指针捕获」搬到 document**，并让事件目标固定：
+
+```js
+// 拖动期间：document 捕获阶段监听，捕获丢了也照样跟手
+document.addEventListener('pointermove', move, true);
+document.addEventListener('pointerup', up, true);
+document.addEventListener('pointercancel', cancel, true);
+window.addEventListener('blur', blur);          // 窗口外松手也能结算
+```
+
+- 按下时 `event.preventDefault()`，掐掉会引发 `pointercancel` 的原生拖拽/选择默认行为；
+- 只认发起手势的 `pointerId`（`owns(e)`），多指不会互相打断；
+- 轨道的 `onPointerMove` 退化为**只做悬停高亮**（`if (dragRef.current) return`），
+  拖动分支只由 document 那一处执行 —— 每个 `pointermove` 恰好应用一次；
+- 指针捕获降级为「顺手取一下」，不再承担正确性；
+- 旋钮恢复 `pointer-events:none`，抓取带（第 13 条）继续覆盖它悬出的部分 ——
+  整段手势的目标恒定是轨道。
+
+### 断言
+
+document 三个监听 + `blur` 兜底存在、`pointerId` 所有权判断存在、`preventDefault()` 存在、
+轨道 handler 在拖动时早退、旋钮仍不可命中。
+
+浏览器实测（伪造最坏情况）：拖动中途强制 `releasePointerCapture` 后再移动，
+滑条仍逐像素跟手，拖到轨道下方 220px 再拖回来也正常，松手正确提交。
+
+---
+
+## 第 18 条 · 按住时的柔光环（设计变更）
+
+### 现象
+
+按住旋钮时，除了放大，还有一圈向外扩散的柔光环。
+
+### 处理
+
+按需求**去掉光环、只保留放大**：删除 `box-shadow: 0 0 0 7px …` 那层外扩，
+按压只剩 `transform:scale(1.16)`，松手沿回弹曲线回位。
+
+### 断言
+
+按住时的 `box-shadow` 必须与静止时**逐像素相同**（实测：两串计算值完全一致），
+且源码里不得再出现 `pressRing` 或按压态的 `box-shadow`。
 
 ---
 

@@ -5,10 +5,10 @@
 > it replaces the compact model seat above the composer with a Codex-style
 > popover — one trigger, two panes.
 
-![version](https://img.shields.io/badge/version-1.0.1-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-1.1.1-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-93%20passing-brightgreen?style=flat-square)
-![dsh](https://img.shields.io/badge/DSH-0.2.0--rc.2-5b6ef5?style=flat-square)
+![tests](https://img.shields.io/badge/tests-107%20passing-brightgreen?style=flat-square)
+![dsh](https://img.shields.io/badge/DSH-0.2.1--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 
 ![Rendered preview of the plugin](docs/images/hero.png)
@@ -164,7 +164,7 @@ seven levels live, the Ultra warning state and the collapsed seats. In the dark 
 
 ### Requirements
 
-- DSH `0.2.0-rc.2` (this plugin is written against that version's slot contract)
+- DSH `0.2.1-rc.2` (also runs on `0.2.0-rc.2`; the label child slot degrades gracefully)
 - **No build step**: `client.js` *is* the release artifact — hand-written and
   statically auditable
 
@@ -233,7 +233,7 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 
 | Item | Notes |
 |---|---|
-| DSH | Verified on **DSH Desktop 0.2.0-rc.2 (Windows)** |
+| DSH | Verified on **DSH Desktop 0.2.1-rc.2 (Windows)**; `0.2.0-rc.2` still works |
 | Runtime dependencies | **None** (`client.js` is hand-written, zero-build, zero third-party code) |
 | Theme | Follows DSH theme tokens (`--dsw-*`), falling back to neutral grey + `#4d93f8` |
 | Platform | Verified on Windows; other platforms untested |

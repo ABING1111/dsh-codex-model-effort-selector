@@ -1,6 +1,6 @@
 # 架构说明 · dsh-codex-model-effort-selector
 
-插件的运行时结构：两半的生命周期、席位接管、弹层状态机、几何与色彩的推导、粒子与交互细节、测试台分工。像素测量与逐帧对照见 [SPEC.md](./SPEC.md)；每个已修缺陷的因果链见 [INCIDENTS.md](./INCIDENTS.md)。所有事实均可在 `client.js`（1120 行）、`test/*.mjs` 与 `README.md` 中核对。
+插件的运行时结构：两半的生命周期、席位接管、弹层状态机、几何与色彩的推导、粒子与交互细节、测试台分工。像素测量与逐帧对照见 [SPEC.md](./SPEC.md)；每个已修缺陷的因果链见 [INCIDENTS.md](./INCIDENTS.md)。所有事实均可在 `client.js`（1514 行）、`test/*.mjs` 与 `README.md` 中核对。
 
 ---
 
@@ -9,7 +9,7 @@
 | 文件 | 行数 | 角色 |
 |---|---|---|
 | `index.js` | 12 | 宿主半边。`export function apply() {}` —— **空实现** |
-| `client.js` | 1120 | 客户端 bundle，**发布产物本身**，手写、零构建、可静态审计 |
+| `client.js` | 1514 | 客户端 bundle，**发布产物本身**，手写、零构建、可静态审计 |
 
 `index.js` 刻意什么都不做：不注册钩子、不发事件、不装服务。它存在的唯一理由是让本包成为 cordis 树上的一个节点 —— 没有宿主条目，`package.json` 里的 `dsh.client` bundle **不会被扫进启动图**。
 
@@ -387,21 +387,83 @@ function buildSparkles(count) {
 
 周期 ×2.6，粒子仍在流动。冻成静态图会让「能量在流动」这个表达整个消失 —— 而那个表达正是 Ultra 档的全部意义。`verify.mjs` 断言媒体查询与 `* 2.6` 同时存在。
 
+### 抵达右端的粒子绽放
+
+星尘是**常驻**的流动背景；绽放是**一次性**的爆散，两者是不同的东西，因此是两套实现：
+
+| | 星尘 `.cmes-sp` | 绽放 `.cmes-bp` |
+|---|---|---|
+| 生命周期 | `infinite` 循环 | `1` 次，`both` 填充 |
+| 驱动 | CSS 变量 `--dur/--delay/--b` | CSS 变量 `--x0/--y0/--x1/--y1/--sz/--bmax/--bd/--bdel` |
+| 触发 | `peak` 或 `fast-mode` 类 | `bloom` 计数作为 React `key`，换 key 即重挂载、动画从 0% 重放 |
+| 分布 | 沿填充横向漂移 | 从旋钮中心朝**左半平面**扇形散开 |
+
+「抵达」是一个**跃迁**而不是一个状态，所以不能用「`index === 末档`」直接渲染，否则每次重渲染都会重放。
+组件用 `seenIndexRef` 记住上一帧的下标，只在「本次是末档且下标变了」时 `setBloom(n => n+1)`；
+每个 `open` 会话的**第一次**观测只记录不触发 —— 这正好实现「打开时本来就停在右端不炸」。
+
+几何全部照录屏量：起点 ≈9–14px（旋钮边缘）、终点横向 34–46px / 纵向 20–29px（椭圆）、直径 3.4–6px、
+只朝左散开（旋钮停在卡片右缘，整圆会被 `overflow:hidden` 裁掉一半）。颜色取当前档位填充色提亮到白，
+`--cmes-mote` 由 `mixHex(fillFor(...), '#ffffff', …)` 现场算出，所以 Ultra 是紫罗兰、其它档位是自己的颜色。
+
+`prefers-reduced-motion` 下**直接坍缩**（`animation-duration:.01s`）而不是放慢 ——
+一个缓慢的放射状爆散看起来像渲染故障，而不像装饰。
+
 ---
 
 ## 交互与吸附
+
+### 手势的所有权：document，不是指针捕获
+
+一次拖动由三件事确定：**谁跟手**、**谁结算**、**目标元素是否会变**。早期实现把前两件交给
+`setPointerCapture` + 轨道自己的 `onPointerMove/onPointerUp`，这并不成立：
+
+| 丢失捕获的原因 | 后果（旧实现） |
+|---|---|
+| 按下触发原生拖拽 / 文字选择 | 浏览器派发 `pointercancel`，手势作废 |
+| 捕获元素被替换 / 重新挂载 | `lostpointercapture`，之后再也收不到移动 |
+| 指针移出窗口 | 没有 `pointerup`，拖动停在半路 |
+| 浏览器接管手势 | 同上 |
+
+所以**在手势存续期间，监听挂在 document 的捕获阶段**：
+
+```js
+document.addEventListener('pointermove', move, true);
+document.addEventListener('pointerup', up, true);
+document.addEventListener('pointercancel', cancel, true);
+window.addEventListener('blur', blur);            // 窗口外松手
+```
+
+三个要点：
+
+1. **捕获阶段的 document 监听能看到每一次指针事件**，无论事件是否被重定向到某个元素 ——
+   于是「捕获有没有拿到」不再影响正确性，`setPointerCapture` 只用于顺手改善体验。
+2. **只认发起手势的 `pointerId`**（`owns(e)`），多指/多设备不会互相打断。
+3. **目标元素必须恒定**：旋钮保持 `pointer-events:none`，命中范围由轨道的 `::before` 抓取带提供。
+   旋钮若可命中，拖动时它会从光标下移走，目标就在旋钮/填充/轨道之间跳 —— 这正是「拖到一半断掉」
+   的第二来源（见 [INCIDENTS 第 17 条](./INCIDENTS.md#第-17-条--拖动到一半变成无法选中)）。
+
+按下时还会 `event.preventDefault()`：它会掐掉指针事件的**兼容鼠标事件与默认动作**
+（文字选择、原生拖拽），而后者正是最常见的 `pointercancel` 来源。
+
+轨道的 `onPointerMove` 因此退化为**只做悬停高亮**（`if (dragRef.current) return`），
+拖动分支只由 document 那一处执行 —— 每个 `pointermove` 恰好应用一次。
 
 ### 拖动连续跟手，松手才吸附
 
 按住指针时旋钮**连续跟指针**（`paintLive` 写原始小数），松手才落到最近的档位点。拖动期间 CSS 过渡被关掉，否则会拖出橡皮筋感：
 
 ```css
-.cmes-rail.dragging .cmes-knob{transition:none}
+/* `left` 无过渡（跟手），但 transform 保留过渡（按压形变要平滑） */
+.cmes-rail.dragging .cmes-knob{transform:scale(1.16);
+  transition:transform .14s cubic-bezier(.2,.9,.3,1.2)}
 .cmes-rail.dragging .cmes-fill{transition:none}
 .cmes-rail.dragging{cursor:grabbing}
 ```
 
-非拖动状态下 `left` / `width` 走 `.18s cubic-bezier(.2,.8,.2,1)`，吸附时看得到一段短动画。
+非拖动状态下 `left` / `width` 走 `.18s cubic-bezier(.2,.8,.2,1)`，吸附时看得到一段短动画；
+`transform` 走 `.34s cubic-bezier(.34,1.56,.64,1)` —— 松手时旋钮**回弹过冲**一下才归位，
+按压形变因此是「放大 → 弹回」，不加光环也不改阴影。
 
 ### 单一无单位分数变量
 
