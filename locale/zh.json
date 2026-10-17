@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Codex 模型与推理选择器",
+    "description": "把 Codex 桌面版的模型选择列表与推理强度滑块 1:1 复刻进 DeepSeek Harness：同一个弹层里切换模型与推理强度。"
+  }
+}

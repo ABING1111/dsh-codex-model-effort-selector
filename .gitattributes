@@ -1,0 +1,24 @@
+# Normalize line endings so a clone on any platform gets the same bytes.
+# Without this, Windows checkouts rewrite every text file to CRLF, which shows
+# up as a whole-repo diff for contributors on macOS/Linux.
+* text=auto eol=lf
+
+# Binary assets — never touch these
+*.png binary
+*.gif binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.zip binary
+*.woff binary
+*.woff2 binary
+
+# Keep the release artifact byte-stable: client.js is the shipped bundle.
+client.js text eol=lf
+
+# Generated PNGs are committed; keep diffs sane
+docs/images/*.png binary
+
+# Lockfiles / CI configs
+*.yml text eol=lf
+*.json text eol=lf

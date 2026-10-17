@@ -1,0 +1,57 @@
+{
+  "name": "dsh-codex-model-effort-selector",
+  "version": "1.0.0",
+  "description": "Codex desktop style model + reasoning-effort selector for DeepSeek Harness: one trigger, one popover, a model list pane and a pixel-replica effort slider.",
+  "type": "module",
+  "license": "MIT",
+  "icon": "./icon.svg",
+  "private": true,
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "codex",
+    "reasoning-effort",
+    "model-selector"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ABING1111/dsh-codex-model-effort-selector.git"
+  },
+  "homepage": "https://github.com/ABING1111/dsh-codex-model-effort-selector#readme",
+  "bugs": {
+    "url": "https://github.com/ABING1111/dsh-codex-model-effort-selector/issues"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/dsh": "0.2.0-rc.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

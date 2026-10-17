@@ -1,0 +1,4 @@
+- insert:
+    - id: dsh-codex-model-effort-selector
+      name: dsh-codex-model-effort-selector
+      config: {}

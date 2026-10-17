@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Codex model & effort selector",
+    "description": "A 1:1 replica of the Codex desktop model list and reasoning-effort slider for DeepSeek Harness: switch model and effort from one popover."
+  }
+}

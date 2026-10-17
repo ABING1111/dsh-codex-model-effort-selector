@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # The package is dependency-free: nothing to install.
+      - name: Syntax check
+        run: node --check client.js
+
+      - name: Offline assertion suite
+        run: node test/verify.mjs
+
+      - name: Palette assertions (WCAG floors + monotonic hue)
+        run: node test/palette.mjs
+
+      - name: Collapse-bug regression (buggy + fixed state machines)
+        run: node test/collapse-regression.mjs
+
+      # Auto-skips when no DSH installation is present, so it passes here too.
+      - name: SlotCore integration
+        run: node test/slots-integration.mjs
+
+      - name: Encoding guard (BOM-free UTF-8, no mojibake)
+        run: node test/encoding.mjs

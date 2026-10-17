@@ -1,0 +1,407 @@
+/**
+ * Offline verification harness for the plugin's client bundle.
+ *
+ * Loads `client.js` into a stub `window.__ModuleLoader__`, supplies minimal
+ * React / DOM shims, and exercises the pure logic paths:
+ *   - effort ordering + Codex labels
+ *   - peak (Ultra) detection keyed on id, not position
+ *   - rail pointer -> index math (the shared inset geometry)
+ *   - model search (case-insensitive ordered subsequence)
+ *   - slot registration shape against the documented host contract
+ *
+ * The React render path is stubbed (no real React available offline); geometry
+ * and colour are verified separately by rendering the HTML prototype.
+ */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import assert from 'node:assert/strict';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const code = readFileSync(join(HERE, '..', 'client.js'), 'utf8');
+
+/* ---------------------------------------------------------------------------
+ * React stub.
+ *
+ * No React ships with this workspace, and the host supplies it through its
+ * module table at runtime. The stub is enough to *load* the bundle and capture
+ * its registration; the render path itself is verified in the browser against
+ * the recorded original (see docs/codex-reasoning-slider-spec.md).
+ * ------------------------------------------------------------------------- */
+const reactStub = {
+  createElement: (type, props, ...kids) => ({ type, props: props || {}, kids }),
+  useState: init => [typeof init === 'function' ? init() : init, () => {}],
+  useEffect: () => {},
+  useLayoutEffect: () => {},
+  useRef: v => ({ current: v }),
+  useMemo: fn => fn(),
+  useSyncExternalStore: (sub, get) => get(),
+  Fragment: 'Fragment'
+};
+const requireStub = spec => (spec === 'react' ? reactStub : {});
+
+
+let registered = null;
+const loaded = {};
+
+globalThis.window = {
+  __ModuleLoader__: {
+    load(def) {
+      assert.equal(def.id, 'dsh-codex-model-effort-selector', 'bundle id');
+      loaded.mod = def.factory(requireStub);
+    }
+  },
+  innerWidth: 1440,
+  innerHeight: 900,
+  addEventListener() {},
+  removeEventListener() {}
+};
+globalThis.document = {
+  addEventListener() {},
+  removeEventListener() {},
+  createElement: () => ({ style: {}, setAttribute() {}, appendChild() {} })
+};
+
+let n = 0;
+const results = [];
+function check(name, fn) {
+  try { fn(); results.push(['ok', name]); }
+  catch (e) { results.push(['FAIL', `${name} — ${e.message}`]); }
+}
+
+// --- execute the bundle so it registers itself -----------------------------
+check('bundle loads and exports a plugin', () => {
+  // the bundle is a plain script that calls window.__ModuleLoader__.load()
+  new Function('window', 'document', 'performance', code)(
+    globalThis.window, globalThis.document,
+    { now: () => 0 }
+  );
+  assert.ok(loaded.mod, 'factory ran');
+  assert.equal(typeof loaded.mod.apply, 'function', 'apply()');
+  assert.deepEqual(loaded.mod.inject, ['slots', 'modelDirectories', 'sessions', 'locale']);
+});
+
+// --- capture what apply() registers ---------------------------------------
+const dictionary = {};
+const slotCalls = [];
+const ctx = {
+  effect: fn => { fn(); },
+  locale: {
+    register: (ns, dict) => { dictionary[ns] = dict; },
+    bind: ns => key => (dictionary[ns] && dictionary[ns].zh && dictionary[ns].zh[key]) ?? key
+  },
+  slots: {
+    inject: (name, cb) => { slotCalls.push(name); cb(); },
+    register: (def, Comp) => { registered = { def, Comp }; return () => {}; }
+  },
+  modelDirectories: {
+    directoryFor: () => ({
+      store: {
+        subscribe: () => () => {},
+        getSnapshot: () => ({ current: null, pending: null, groups: [], status: 'idle' })
+      },
+      load: () => Promise.resolve(),
+      select: () => Promise.resolve({ ok: true })
+    })
+  },
+  sessions: { subagentAddress: () => undefined }
+};
+
+check('apply() registers the composer model seat', () => {
+  loaded.mod.apply(ctx);
+  assert.deepEqual(slotCalls, ['conversation.input.model']);
+  assert.ok(registered, 'slot registered');
+  assert.equal(registered.def.name, 'conversation.input.model');
+  assert.equal(registered.def.locale, 'dsh-codex-model-effort-selector');
+  assert.equal(typeof registered.def.inject, 'function');
+  assert.equal(typeof registered.Comp, 'function');
+});
+
+check('shadows the shipped seat instead of colliding with it', () => {
+  // `conversation.input.model` is `kind: 'single'` and the shipped
+  // ModelSelect already holds it at priority 0. A single slot allows only one
+  // entry per priority and register() THROWS on a duplicate, so priority 0
+  // would abort the whole plugin load. Shadowing needs a strictly lower value.
+  const p = registered.def.priority;
+  assert.equal(typeof p, 'number', 'priority must be an explicit number');
+  assert.ok(p < 0, `priority must be < 0 to win the cell, got ${p}`);
+});
+
+check('no duplicate key collides with the shipped registration', () => {
+  // A single slot's cell is the whole slot, so the ONLY collision risk is the
+  // priority value; assert we did not also smuggle in a key/id/order.
+  assert.equal(registered.def.key, undefined, 'single slot takes no key');
+  assert.equal(registered.def.id, undefined, 'single slot takes no id');
+});
+
+check('owner-supplied props are not re-declared by inject()', () => {
+  // `locked` is passed by the slot owner (renderSlot(..., { locked })),
+  // so the business share must not shadow it with a constant.
+  const api = registered.def.inject('session-1');
+  assert.equal('locked' in api, false, 'locked must come from the owner, not inject');
+  assert.deepEqual(Object.keys(api).sort(), ['available', 'directory', 'load', 'select']);
+});
+
+check('dictionaries have identical key sets (zh/en)', () => {
+  const d = dictionary['dsh-codex-model-effort-selector'];
+  assert.ok(d, 'dictionary registered');
+  const zk = Object.keys(d.zh).sort();
+  const ek = Object.keys(d.en).sort();
+  assert.deepEqual(zk, ek, 'key sets must match');
+  assert.ok(zk.length >= 20, `enough keys (${zk.length})`);
+});
+
+check('slot inject() returns the documented shape', () => {
+  const api = registered.def.inject('session-1');
+  assert.equal(api.available, true);
+  assert.equal(typeof api.load, 'function');
+  assert.equal(typeof api.select, 'function');
+  assert.ok(api.directory, 'directory store present');
+});
+
+check('subagent sessions are reported unavailable', () => {
+  ctx.sessions.subagentAddress = () => 'agent-7';
+  const api = registered.def.inject('session-2');
+  assert.equal(api.available, false, 'subagent must not select');
+  ctx.sessions.subagentAddress = () => undefined;
+});
+
+// --- pure logic mirrored from the bundle ----------------------------------
+// (kept in sync by asserting against the shipped source text)
+const src = code;
+
+check('peak ids are max/ultra (not "last stop")', () => {
+  assert.match(src, /const PEAK_IDS = \['max', 'ultra'\];/);
+  assert.match(src, /isPeakId = id => PEAK_IDS\.includes/);
+  // the buggy positional form must be gone
+  assert.doesNotMatch(src, /nextIdx === efforts\.length - 1 && nextIdx > 0/);
+});
+
+check('geometry constants match the measured spec', () => {
+  // knob and fill both derive from ONE unitless --pos fraction, so a drag can
+  // drive it directly and React's next render restores the snapped value
+  assert.match(src, /width:calc\(\(100% - 30px\)\*var\(--\$\{P\}-pos,0\) \+ 15px\)/, 'fill formula');
+  assert.match(src, /left:calc\(\(100% - 30px\)\*var\(--\$\{P\}-pos,0\)\)/, 'knob formula');
+  assert.match(src, /top:65px;height:26px;border-radius:16px/, 'rail box');
+  assert.match(src, /left:12px;right:12px;top:65px/, 'rail inset');
+  assert.match(src, /width:30px;height:30px;border-radius:50%/, 'knob');
+  assert.match(src, /top:11px;left:calc\(\(100% - 30px\)\*var\(--\$\{P\}-tick,0\) \+ 15px\);width:4px;height:4px/, 'dot');
+  // the shared 15px / 30px inset pair must survive in the pointer math
+  assert.match(src, /\(clientX - box\.left - 15\) \/ \(box\.width - 30\)/, 'inset math');
+  assert.match(src, /15 \+ frac \* \(box\.width - 30\)/, 'knobX math');
+  // no pixel-valued leftovers that React could fail to restore on release
+  assert.doesNotMatch(src, /--\$\{P\}-knob-x/, 'knob-x pixel var must be gone');
+  assert.doesNotMatch(src, /--\$\{P\}-w,/, 'fill width pixel var must be gone');
+});
+
+check('measured palette is present', () => {
+  // the original recording's blue plus the violet Ultra ink are still here
+  for (const c of ['#3a83f7', '#3b83f6', '#a779fe', '#7448ee', '#8b46ee']) {
+    assert.ok(src.includes(c), `missing ${c}`);
+  }
+});
+
+check('no host hooks or events are registered (fail-open)', () => {
+  assert.doesNotMatch(src, /ctx\.on\(/, 'must not emit/subscribe events');
+  assert.doesNotMatch(src, /ctx\.plugin\(/, 'must not install plugins');
+  assert.doesNotMatch(src, /productAnalytics/, 'no analytics');
+});
+
+check('Cordis effect is used for disposal', () => {
+  assert.match(src, /ctx\.effect\(\(\) => ctx\.locale\.register/, 'locale register inside effect');
+});
+
+check('rail pointer math uses the 15px inset', () => {
+  assert.match(src, /\(clientX - box\.left - 15\) \/ \(box\.width - 30\)/, 'nearest() inset math');
+});
+
+check('drag is continuous, not snapped while the pointer is down', () => {
+  // paintLive must write the raw fraction, and pointerMove must not snap
+  assert.match(src, /function paintLive\(frac\)[\s\S]*?setProperty\(`--\$\{P\}-pos`, String\(frac\)\)/, 'paintLive writes fraction');
+  assert.match(src, /if \(dragRef\.current\) \{[\s\S]*?const frac = fractionAt\(event\.clientX\)[\s\S]*?paintLive\(frac\)/, 'move tracks pointer');
+  // snapping belongs on release only
+  assert.match(src, /function finish\(event\)[\s\S]*?nearestIndex\(event \? event\.clientX : NaN\)/, 'finish snaps');
+});
+
+check('an in-flight commit never blocks grabbing the rail', () => {
+  // pointerDown must not test busyRef — that was the "cannot grab it" symptom
+  const pd = src.match(/function pointerDown\(event\) \{([\s\S]*?)\n      \}/);
+  assert.ok(pd, 'pointerDown found');
+  assert.doesNotMatch(pd[1], /busyRef\.current/, 'pointerDown must not gate on busyRef');
+});
+
+check('in-flight commits coalesce instead of being dropped', () => {
+  assert.match(src, /pendingRef\.current = next;/, 'newest intent remembered');
+  assert.match(src, /if \(busyRef\.current\) return;/, 'only the first runs the loop');
+  assert.match(src, /while \(pendingRef\.current\)/, 'queued intent is drained');
+});
+
+check('model search is a case-insensitive ordered subsequence', () => {
+  assert.match(src, /name\.includes\(q\)/, 'substring pass');
+  assert.match(src, /for \(const ch of name\) if \(ch === q\[i\]\) i\+\+;/, 'subsequence pass');
+  assert.match(src, /query\.trim\(\)\.toLowerCase\(\)/, 'normalisation');
+});
+
+/* ── two-level drill-down (replaces the buggy collapsible-group list) ────── */
+
+check('the model pane is a two-level drill-down, not collapsible groups', () => {
+  // page state exists and is 1 | 2
+  assert.match(src, /const \[view, setView\] = useState\(1\)/, 'view state');
+  assert.match(src, /const \[subProvider, setSubProvider\] = useState\(null\)/, 'sub-provider state');
+  // navigation helpers
+  assert.match(src, /function enterProvider\(gid\)[\s\S]*?setView\(2\)/, 'enterProvider drills in');
+  assert.match(src, /function goBack\(\)[\s\S]*?setView\(1\)/, 'goBack returns');
+  // both pages rendered
+  assert.match(src, /\$\{P\}-page slot1/, 'page 1 rendered');
+  assert.match(src, /\$\{P\}-page slot2/, 'page 2 rendered');
+  // the contradictory open/closed set model must be gone entirely
+  assert.doesNotMatch(src, /collapsedIds/, 'collapsedIds removed');
+  assert.doesNotMatch(src, /toggleGroup/, 'toggleGroup removed');
+  assert.doesNotMatch(src, /isExpanded/, 'isExpanded removed');
+});
+
+check('REGRESSION: no contradictory expand/collapse state remains', () => {
+  // The original bug: `toggleGroup` treated the state as a set of EXPANDED ids
+  // while `isExpanded` read it as a set of COLLAPSED ids, so the first click
+  // produced an empty set => "nothing collapsed" => every group opened at once.
+  // A one-meaning-only design (a page index) makes that impossible.
+  assert.doesNotMatch(src, /!collapsedIds\.has/, 'no inverted set read');
+  assert.doesNotMatch(src, /next\.add\(gid\)/, 'no expanded-id set write');
+  // exactly one source of truth for which page shows
+  assert.match(src, /if \(view !== 2 \|\| !activeProvider\)/, 'single page predicate');
+});
+
+check('page 1 rows show the provider name + chevron (no gray model text)', () => {
+  // the gray "currently selected model" column was removed on request: page 1
+  // is name + dot + chevron, nothing else.
+  assert.doesNotMatch(src, /\$\{P\}-rowCur/, 'current-model column removed');
+  assert.doesNotMatch(src, /\$\{P\}-rowCur\{/, 'current-model style removed');
+  assert.match(src, /\$\{P\}-rowChev/, 'chevron');
+  // and the name must absorb the free space so the dot/chevron stay right
+  assert.match(src, /\$\{P\}-rowName\{flex:1 1 auto;min-width:0;overflow:hidden/, 'name fills the row');
+  assert.match(src, /aria-expanded': view === 2 && subProvider === g\.id/, 'expanded state');
+});
+
+check('page 2 has a back button, a search box and a list', () => {
+  assert.match(src, /\$\{P\}-back/, 'back button');
+  assert.match(src, /\$\{P\}-search/, 'search box');
+  assert.match(src, /\$\{P\}-list/, 'scrollable list');
+});
+
+check('Escape backs out one layer at a time', () => {
+  assert.match(src, /if \(latest\.current\.view === 2\) \{ goBack\(\); \}/, 'page 2 -> page 1');
+  assert.match(src, /else \{ setPane\('effort'\); setQuery\(''\); \}/, 'page 1 -> effort');
+});
+
+check('switching model lands on the MIDDLE level (reference rule)', () => {
+  assert.match(src, /const mid = levels\.length \? levels\[Math\.floor\(levels\.length \/ 2\)\]\.id : undefined/,
+    'floor(n/2) rule');
+  // a model with no levels must omit the key, not send null
+  assert.match(src, /\(id === undefined \? \{\} : \{ reasoningEffort: id \}\)/, 'absent, never null');
+});
+
+check('the drill-down state resets on close', () => {
+  const closeFn = src.match(/function close\(\) \{([\s\S]*?)\n      \}/);
+  assert.ok(closeFn, 'close found');
+  assert.match(closeFn[1], /setView\(1\)/, 'view reset');
+  assert.match(closeFn[1], /setSubProvider\(null\)/, 'sub-provider reset');
+});
+
+check('height uses real measured row heights (no clipping)', () => {
+  // the reference learned this the hard way: a stale row height clips the last
+  // row of page 1, and page 1 has no scroll container to recover
+  assert.match(src, /const ROW_H = 41, MODEL_H = 39, LIST_MAX_H = 252, LIST_PAD_B = 4;/, 'row constants');
+  assert.match(src, /const HEAD_H = 36, SEARCH_H = 40, EMPTY_H = 48, SEC_H = 30, PAD = 20;/, 'page-2 constants');
+  // CSS must agree with the constants
+  assert.match(src, /\$\{P\}-row\{[^}]*padding:10px;border-radius:10px/, 'row padding 10 (=> 41 high)');
+  assert.match(src, /\$\{P\}-model\{[^}]*padding:9px 10px;border-radius:9px/, 'model padding 9 (=> 39 high)');
+  assert.match(src, /\$\{P\}-list\{[^}]*max-height:252px/, 'list cap matches');
+});
+
+/* ── the three latest reported issues ───────────────────────────────────── */
+
+check('ISSUE 1: the active provider is marked with a blue dot', () => {
+  assert.match(src, /\$\{P\}-rowDot\{[^}]*border-radius:50%;background:#3a83f7/, 'dot style');
+  assert.match(src, /className: `\$\{P\}-rowDot`, hidden: !isCurrent/, 'dot only on the current provider');
+  // keyed off the SELECTION, not off which provider is drilled into
+  assert.match(src, /const isCurrent = selection\?\.provider === g\.id;/, 'keyed on selection');
+  // the dot sits at the RIGHT end: it is rendered AFTER the name (the name
+  // takes flex:1, so the dot + chevron get pushed to the right edge)
+  const row = src.match(/const providerNodes = groups\.map\(g => \{[\s\S]*?\n      \}\);/);
+  assert.ok(row, 'provider row builder found');
+  const nameAt = row[0].indexOf('${P}-rowName');
+  const dotAt = row[0].indexOf('${P}-rowDot');
+  const chevAt = row[0].indexOf('${P}-rowChev');
+  assert.ok(nameAt > -1 && dotAt > -1 && chevAt > -1, 'name, dot and chevron all rendered');
+  assert.ok(nameAt < dotAt, 'dot comes AFTER the name (right side)');
+  assert.ok(dotAt < chevAt, 'dot comes BEFORE the chevron');
+});
+
+check('ISSUE 2: every page list is its own scroller', () => {
+  // the pane needs a DEFINITE height, otherwise height:100% resolves to auto
+  // and the flex chain cannot hand leftover space to the scrollers
+  assert.match(src, /\$\{P\}-models\{top:0;height:100%/, 'pane pinned top:0 for a definite height');
+  assert.match(src, /\$\{P\}-viewport\{[^}]*min-height:0/, 'viewport min-height:0');
+  assert.match(src, /\$\{P\}-page\{[^}]*height:100%;display:flex;flex-direction:column;overflow:hidden/, 'page is a flex column');
+  // page 1 gets its OWN scroll container (the reported bug: it had none)
+  assert.match(src, /\$\{P\}-rows\{flex:1 1 auto;min-height:0;overflow-y:auto/, 'page-1 scroller');
+  assert.match(src, /h\('div', \{ className: `\$\{P\}-rows` \}, \.\.\.providerNodes, \.\.\.noticeNodes\)/, 'page 1 wraps rows in the scroller');
+  // and the height is capped to the room above the trigger
+  assert.match(src, /const roomAbove = typeof window === 'undefined'/, 'room-above computation');
+  assert.match(src, /const cappedHeight = Math\.min\(menuHeight, roomAbove\)/, 'height is capped');
+  assert.match(src, /\$\{pane === 'models' \? cappedHeight : 104\}px/, 'capped height applied');
+});
+
+check('ISSUE 3: the knob always settles on a stop on release', () => {
+  // snapLive exists and writes the snapped fraction directly
+  assert.match(src, /function snapLive\(i\)[\s\S]*?setProperty\(`--\$\{P\}-pos`, String\(stopFraction\(i\)\)\)/, 'snapLive writes a stop');
+  // release path snaps BEFORE committing
+  const fin = src.match(/function finish\(event\) \{([\s\S]*?)\n      \}/);
+  assert.ok(fin, 'finish found');
+  assert.match(fin[1], /snapLive\(i\)/, 'finish snaps the knob');
+  // cancel rolls back onto the committed stop, not the raw position
+  const cancel = src.match(/function cancelDrag\(\) \{([\s\S]*?)\n      \}/);
+  assert.ok(cancel, 'cancelDrag found');
+  assert.match(cancel[1], /snapLive\(index\)/, 'cancel rolls back to a stop');
+  // keyboard moves snap too
+  const key = src.match(/function keyDown\(event\) \{([\s\S]*?)\n      \}/);
+  assert.ok(key, 'keyDown found');
+  assert.match(key[1], /snapLive\(i\)/, 'keyboard snaps');
+  // a helper defines what a stop is
+  assert.match(src, /function stopFraction\(i\)/, 'stop fraction helper');
+});
+
+check('provider load failures are surfaced, not swallowed', () => {
+  assert.match(src, /\$\{P\}-failure/, 'failure row class');
+  assert.match(src, /state\.failures/, 'reads failures from the directory snapshot');
+});
+
+check('sparkles are deterministic (no Math.random in code)', () => {
+  // strip comments so a comment mentioning Math.random cannot mask a real call
+  const noComments = src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(noComments, /Math\.random/, 'must be deterministic');
+  assert.match(src, /function hash01\(n\)/);
+});
+
+check('reduced-motion slows rather than freezes particles', () => {
+  assert.match(src, /prefers-reduced-motion:reduce/, 'media query present');
+  assert.match(src, /animation-duration:calc\(var\(--dur,3s\) \* 2\.6\)/, 'x2.6');
+});
+
+check('accessible roles are declared', () => {
+  assert.match(src, /role: 'slider'/, 'slider role');
+  assert.match(src, /'aria-valuetext': currentLabel/, 'valuetext');
+  assert.match(src, /role: 'menuitemradio'/, 'model rows');
+  assert.match(src, /'aria-checked': selected/, 'checked state');
+});
+
+// --- report ---------------------------------------------------------------
+let failed = 0;
+for (const [status, name] of results) {
+  if (status === 'ok') console.log(`  ok   ${name}`);
+  else { failed++; console.log(`  FAIL ${name}`); }
+}
+console.log(`\n${results.length - failed}/${results.length} passed`);
+process.exit(failed ? 1 : 0);
