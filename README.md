@@ -281,7 +281,7 @@ index.js                   宿主半边，空实现 —— 只为让本包成为
 cordis.patch.yml           把本包 insert 进 profile 的组合层
 package.json               声明 dsh.bundle.patch 与 dsh.client（含 inject 依赖）
 locale/{zh,en}.json        插件在插件管理页里的标题与描述
-icon.svg                   插件图标
+icon.svg                   插件图标（蓝→紫对角渐变 + 白色闪电，按参考图逐像素量出）
 docs/                      架构、事故复盘、像素规格与本文截图
 test/                      离线断言 + 配色断言 + 折叠回归 + 真实 SlotCore 集成 + 截图生成器
 ```
