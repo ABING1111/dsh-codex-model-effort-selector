@@ -258,11 +258,13 @@ check('rail pointer math uses the 15px inset', () => {
 });
 
 check('drag is continuous, not snapped while the pointer is down', () => {
-  // paintLive must write the raw fraction, and pointerMove must not snap
+  // paintLive must write the raw fraction, and every pointer sample must go
+  // through ONE applier so the press and the moves can never disagree
   assert.match(src, /function paintLive\(frac\)[\s\S]*?setProperty\(`--\$\{P\}-pos`, String\(frac\)\)/, 'paintLive writes fraction');
-  assert.match(src, /if \(dragRef\.current\) \{[\s\S]*?const frac = fractionAt\(event\.clientX\)[\s\S]*?paintLive\(frac\)/, 'move tracks pointer');
+  assert.match(src, /function applyPointer\(clientX\) \{[\s\S]*?const frac = fractionAt\(clientX\)[\s\S]*?paintLive\(frac\)/, 'applyPointer tracks the pointer');
+  assert.match(src, /applyPointer\(e\.clientX\); \}/, 'the move listener feeds raw coordinates');
   // snapping belongs on release only
-  assert.match(src, /function finish\(event\)[\s\S]*?nearestIndex\(event \? event\.clientX : NaN\)/, 'finish snaps');
+  assert.match(src, /function finish\(event\)[\s\S]*?nearestIndex\(event\.clientX\)/, 'finish snaps');
 });
 
 check('an in-flight commit never blocks grabbing the rail', () => {
@@ -401,6 +403,15 @@ check('ISSUE 3: the knob always settles on a stop on release', () => {
   const fin = src.match(/function finish\(event\) \{([\s\S]*?)\n      \}/);
   assert.ok(fin, 'finish found');
   assert.match(fin[1], /snapLive\(i\)/, 'finish snaps the knob');
+  /* A release with NO coordinates (the window-level safety net, a synthesised
+   * pointerup, a lost capture) must resolve to the CURRENT stop. The old
+   * `nearestIndex(event ? event.clientX : NaN)` wrote `--pos: NaN`, which makes
+   * the knob's `left:calc(...)` invalid and hurls the knob across the track. */
+  assert.match(fin[1], /Number\.isFinite\(event\.clientX\)/, 'finish guards a coordinate-less release');
+  assert.match(fin[1], /known \? nearestIndex\(event\.clientX\) : index/, 'falls back to the current stop');
+  // strip comments: the fix's own explanation quotes the NaN form it replaces
+  const finCode = fin[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(finCode, /NaN/, 'no NaN may reach snapLive');
   // cancel rolls back onto the committed stop, not the raw position
   const cancel = src.match(/function cancelDrag\(\) \{([\s\S]*?)\n      \}/);
   assert.ok(cancel, 'cancelDrag found');
@@ -437,6 +448,141 @@ check('accessible roles are declared', () => {
   assert.match(src, /'aria-valuetext': currentLabel/, 'valuetext');
   assert.match(src, /role: 'menuitemradio'/, 'model rows');
   assert.match(src, /'aria-checked': selected/, 'checked state');
+});
+
+/* ── the Fast tooltip: why it never appeared, and the fix ────────────────── */
+
+check('FIX: the Fast tooltip lives OUTSIDE the popover', () => {
+  // Root cause: the popover paints the shipped menu material, and a non-none
+  // backdrop-filter makes an element the CONTAINING BLOCK for fixed descendants.
+  // A position:fixed tooltip inside it was therefore laid out against the
+  // popover box and clipped away by overflow:hidden — hover set opacity:1 but
+  // nothing was ever painted.
+  assert.match(src, /\.\$\{P\}-popover\{[\s\S]*?backdrop-filter:var\(--dsw-menu-backdrop-filter\)/,
+    'the popover still paints the menu material (the cause)');
+  assert.match(src, /\.\$\{P\}-popover\{[\s\S]*?overflow:hidden/, 'and it still clips (the other half of the cause)');
+  // the old descendant rule can no longer work, so it must be gone
+  assert.doesNotMatch(src, /\.\$\{P\}-fast:hover \[role=tooltip\]/, 'descendant hover rule removed');
+  // the tooltip node must be rendered AFTER the popover section, i.e. outside it
+  const sectionAt = src.indexOf("h('section', {");
+  const tipAt = src.indexOf("role: 'tooltip'");
+  assert.ok(sectionAt > -1, 'popover section exists');
+  assert.ok(tipAt > -1, 'tooltip node exists');
+  assert.ok(tipAt > sectionAt, 'the tooltip renders after (outside) the popover');
+  assert.equal(src.split("role: 'tooltip'").length - 1, 1, 'exactly one tooltip node');
+});
+
+check('FIX: tooltip visibility is state-driven, and it is placed with real metrics', () => {
+  assert.match(src, /const \[tipOn, setTipOn\] = useState\(false\)/, 'hover/focus state');
+  assert.match(src, /className: `\$\{P\}-tip\$\{tipShown \? ' show' : ''\}`/, '`.show` drives it');
+  assert.match(src, /\.\$\{P\}-tip\.show\{opacity:1;visibility:visible/, 'the CSS exists');
+  // positioning must happen AFTER layout: on the first hover the un-laid-out
+  // layer reported 0x0 and was placed with placeholder numbers
+  assert.match(src, /if \(!tipShown\) return;\s*positionTip\(\);/, 'layout effect positions it');
+  assert.match(src, /const th = tip\.offsetHeight \|\| 44;/, 'height is measured');
+  // and it must never outlive the state that anchors it
+  assert.match(src, /if \(!open\) setTipOn\(false\)/, 'closes with the popover');
+  assert.match(src, /if \(pane !== 'effort'\) setTipOn\(false\)/, 'closes with the pane');
+});
+
+check('the tooltip keeps the reference card shape and the disclosure stays reachable', () => {
+  // two visible lines (title + quota note), like the reference tooltip
+  assert.match(src, /h\('span', \{ className: `\$\{P\}-tipTitle` \}, t\('fast'\)\)/, 'title line');
+  assert.match(src, /h\('span', null, t\('usage'\)\)/, 'secondary line');
+  // the "visual only" note is not deleted, only demoted to assistive tech
+  assert.match(src, /h\('span', \{ className: `\$\{P\}-sr` \}, t\('visual'\)\)/, 'sr-only disclosure');
+  assert.match(src, /'aria-describedby': 'cmes-fast-tip'/, 'button points at the tooltip');
+});
+
+/* ── the far-right arrival bloom ────────────────────────────────────────── */
+
+check('NEW: arriving at the far-right stop blooms particles', () => {
+  assert.match(src, /const BLOOM_COUNT = 18;/, 'mote count');
+  assert.match(src, /function buildBloom\(count\)/, 'deterministic builder');
+  assert.match(src, /const arrived = index === efforts\.length - 1 && seenIndexRef\.current !== index;/,
+    'fires on the ARRIVAL transition only');
+  assert.match(src, /if \(arrived\) setBloom\(n => n \+ 1\);/, 'bumps the burst key');
+  assert.match(src, /if \(seenIndexRef\.current === null\) \{ seenIndexRef\.current = index; return; \}/,
+    'opening already parked at the end must not bloom');
+  assert.match(src, /key: `bloom-\$\{bloom\}`/, 'a new key remounts the layer');
+  assert.match(src, /@keyframes \$\{P\}-burst/, 'the burst keyframes');
+  assert.match(src, /\.\$\{P\}-bloom\{position:absolute;left:calc\(100% - 15px\);top:13px/,
+    'anchored on the right-end knob centre');
+  assert.match(src, /\.\$\{P\}-halo\{/, 'the bloom ring');
+  // the motes take the current level colour
+  assert.match(src, /\[`--\$\{P\}-mote`\]: mixHex\(fillFor\(displayed, dark\), '#ffffff'/, 'mote colour');
+  // decoration only: it must never intercept pointer events
+  assert.match(src, /\.\$\{P\}-bloom\{[^}]*pointer-events:none/, 'bloom is click-through');
+  assert.match(src, /\.\$\{P\}-bp\{animation-duration:\.01s;animation-delay:0s\}/,
+    'reduced motion collapses the burst');
+});
+
+/* ── press / release deformation ────────────────────────────────────────── */
+
+check('NEW: press and release deform the knob', () => {
+  assert.match(src, /\.\$\{P\}-rail\.dragging \.\$\{P\}-knob\{transform:scale\(1\.16\)\}/, 'press scale — and nothing else');
+  // the halo ring was removed on request: the press is a size change only
+  assert.doesNotMatch(src, /pressRing/, 'no press halo may come back');
+  assert.doesNotMatch(src, /\.\$\{P\}-rail\.dragging \.\$\{P\}-knob\{[^}]*box-shadow/, 'no shadow bloom on press');
+  // the release springs back through an overshoot curve
+  assert.match(src, /transform \.34s cubic-bezier\(\.34,1\.56,\.64,1\)/, 'spring back');
+  // scale about the knob's own centre: its layout box (what the drag maths
+  // reads) must not move
+  assert.match(src, /transform-origin:50% 50%/, 'centre origin');
+  // the puck itself stays transparent to input: the grab pad covers its
+  // overhang, and one stable event target is what keeps a drag unbroken
+  assert.match(src, /pointer-events:none;z-index:2;transform:scale\(1\)/, 'the knob is not a hit target');
+});
+
+/* ── the "press but it will not slide" bug ──────────────────────────────── */
+
+check('FIX: the knob overhang is no longer a dead zone', () => {
+  // the puck is 30px tall on a 26px track: its 2px overhang used to hit the
+  // pane, so no pointerdown reached the rail — worst at the far-right stop,
+  // where the knob is the only target left
+  assert.match(src, /\.\$\{P\}-rail::before\{content:"";position:absolute;inset:-6px -3px/, 'grab pad');
+  assert.match(src, /onPointerDown: pointerDown, onPointerMove: pointerMove/, 'rail starts the gesture');
+  assert.match(src, /if \(!Number\.isFinite\(clientX\)\) return Math\.max\(0, index\);/, 'nearestIndex guard');
+});
+
+check('FIX: a drag cannot be interrupted mid-gesture', () => {
+  // the gesture is owned by the DOCUMENT (capture phase), so losing pointer
+  // capture — or never getting it — cannot strand a drag half-way
+  assert.match(src, /document\.addEventListener\('pointermove', move, true\)/, 'document move listener');
+  assert.match(src, /document\.addEventListener\('pointerup', up, true\)/, 'document release listener');
+  assert.match(src, /document\.addEventListener\('pointercancel', cancel, true\)/, 'document cancel listener');
+  // a release outside the window never reaches the document; focus loss settles it
+  assert.match(src, /window\.addEventListener\('blur', blur\)/, 'focus loss settles the gesture');
+  // filtered to the pointer that started the gesture
+  assert.match(src, /const owns = e => pointerRef\.current === null \|\| e\.pointerId === pointerRef\.current;/, 'pointerId ownership');
+  // native press-drag defaults (selection / drag-and-drop) are suppressed,
+  // because THOSE are what fire pointercancel and kill a drag
+  assert.match(src, /event\.preventDefault\(\);/, 'press suppresses native drag defaults');
+  // capture is best-effort only, never the mechanism
+  assert.match(src, /Pointer capture is a convenience, NOT the mechanism/, 'capture is documented as optional');
+  // the rail's own move handler must not also apply the drag (no double work)
+  const pm = src.match(/function pointerMove\(event\) \{([\s\S]*?)\n      \}/);
+  assert.ok(pm, 'pointerMove found');
+  assert.match(pm[1], /if \(dragRef\.current\) return;/, 'rail handler is hover-only while dragging');
+});
+
+check('FIX: hovering a tick now actually highlights it', () => {
+  // this used to pass the EVENT OBJECT where a clientX was expected, so the
+  // mapping was NaN and the highlight never fired
+  assert.match(src, /const i = nearestIndex\(event\.clientX\);/, 'passes the coordinate');
+  assert.doesNotMatch(src, /nearestIndex\(event\)[,;]/, 'never passes the event object');
+});
+
+/* ── DSH 0.2.1-rc.2 contract ────────────────────────────────────────────── */
+
+check('0.2.1: the seat declares its label child slot and renders it', () => {
+  assert.match(src, /children: \{\n\s*'conversation\.input\.model\.label': \{\n\s*kind: 'single', scope: 'session', inline: true/,
+    'the child slot is declared with the shipped spec');
+  assert.match(src, /renderSlot\('conversation\.input\.model\.label'/, 'and rendered');
+  assert.match(src, /placement: 'trigger'/, 'trigger placement');
+  assert.match(src, /placement: 'option'/, 'option placement');
+  // a 0.2.0 host hands out no renderSlot; the plain name must still render
+  assert.match(src, /: modelName,/, 'plain-name fallback kept');
 });
 
 // --- report ---------------------------------------------------------------

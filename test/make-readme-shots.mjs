@@ -115,9 +115,7 @@ function effortPane(id, opts = {}) {
   <div class="${P}-root">
   <div class="${P}-popover${peak ? ' peak' : ''}${opts.message ? ' message' : ''}${opts.fast ? ' fast-mode' : ''}" style="--${P}-ink:${INK[id]}">
     <div class="${P}-pane ${P}-main">
-      <button class="${P}-tool ${P}-fast${opts.fast ? ' active' : ''}">${boltSvg(!!opts.fast)}
-        <span class="${P}-tip"><span class="${P}-tipTitle">1.5 倍速</span><span>用量更多</span><span>(仅视觉效果)</span></span>
-      </button>
+      <button class="${P}-tool ${P}-fast${opts.fast ? ' active' : ''}">${boltSvg(!!opts.fast)}</button>
       <button class="${P}-modelLink">
         ${title}
         <span class="${P}-modelName">${opts.model || '6 Astra'}</span>
@@ -244,12 +242,12 @@ ${/* the popover is position:fixed in production; here it is laid out in flow */
 .hostList .${P}-popover{position:static!important;bottom:auto!important;left:auto!important;top:auto!important}
 /* freeze animations so screenshots are deterministic */
 .${P}-sp,.${P}-popover.peak .${P}-fill,.${P}-popover.peak .${P}-fill::before{animation-play-state:paused!important}
-/* the tooltip is opacity:0 by default; force it visible for the Fast shot.
-   It is a position:fixed layer in production precisely BECAUSE the popover
-   clips its children — so the shot must place it outside the popover too. */
-.tipLayer .${P}-tip{opacity:1!important;visibility:visible!important}
-/* the in-pane copy stays hidden; the shot shows the unclipped overlay instead */
-.tipLayer .${P}-fast .${P}-tip{display:none}
+/* the tooltip is opacity:0 by default; unhide it for the Fast shot.
+   In production it renders OUTSIDE the popover (a sibling under .cmes-root):
+   the popover's backdrop-filter makes it the containing block for fixed
+   descendants, so a nested fixed layer was clipped away entirely. The shot
+   places it the same way — outside the popover box. */
+.tipLayer .${P}-tip{opacity:1!important;visibility:visible!important;transform:none!important}
 `;
 /* The plugin's own rules only apply inside `.cmes-root`; the harness styles
    above are scoped so they can never leak into the shipped CSS. */
@@ -421,18 +419,20 @@ shots.push({
   html: page('details', `
   <div style="position:absolute;inset:0;background:#f4f6fa"></div>
   <div style="position:absolute;left:44px;top:32px;font-size:19px;font-weight:650;color:#0f1116">两个细节</div>
-  <div style="position:absolute;left:44px;top:62px;font-size:13px;color:#5b6270">Fast 说明用 fixed 层，不再被弹层裁切；Ultra 档短暂显示额度警示</div>
+  <div style="position:absolute;left:44px;top:62px;font-size:13px;color:#5b6270">Fast 说明浮层渲染在弹层之外（弹层的 backdrop-filter 会让它成为 fixed 子元素的包含块）；Ultra 档短暂显示额度警示</div>
   <div style="position:absolute;left:44px;top:186px;display:flex;gap:34px;align-items:flex-start">
     <div>
       <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#7c8290;margin-bottom:8px">FAST 说明浮层</div>
+      <div style="height:74px"></div>
       <div class="host tipLayer" style="width:272px;height:200px">${effortPane('high', { fast: true })}
-        <span class="${P}-tip" style="position:absolute;left:88px;top:-56px;text-align:left">
-          <span class="${P}-tipTitle">1.5 倍速</span><span>用量更多</span><span>(仅视觉效果)</span>
+        <span class="${P}-tip" role="tooltip" style="position:absolute;left:-6px;top:-58px">
+          <span class="${P}-tipTitle">1.5 倍速</span><span>用量更多</span><span class="${P}-sr">(仅视觉效果)</span>
         </span>
       </div>
     </div>
     <div>
       <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#7c8290;margin-bottom:8px">ULTRA 进入瞬间</div>
+      <div style="height:74px"></div>
       <div class="host" style="width:272px;height:200px">${effortPane('max', { message: true })}</div>
     </div>
   </div>

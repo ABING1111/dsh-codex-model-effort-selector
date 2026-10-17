@@ -284,13 +284,32 @@ window.__ModuleLoader__.load({
 .${P}-chev{width:12px;height:12px;flex:none;color:var(--dsw-alias-label-caption);transition:transform .12s ease}
 .${P}-trigger[aria-expanded=true] .${P}-chev{transform:rotate(180deg)}
 
-/* the Fast tooltip is CSS-driven so no JS hover state is needed.
-   It must escape the popover overflow clip, so it is rendered as a
-   fixed-position layer anchored to the button instead of an in-flow child. */
-.${P}-fast:hover [role=tooltip],.${P}-fast:focus-visible [role=tooltip]{opacity:1;visibility:visible}
-.${P}-tip{position:fixed;z-index:1400;padding:6px 9px;white-space:nowrap;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));box-shadow:var(--dsw-elevation-panel);border-radius:8px;font-size:12px;line-height:18px;text-align:center;color:var(--dsw-alias-label-primary);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .12s ease,visibility 0s .12s}
+/* ---------- the Fast tooltip ----------
+   BUG (fixed here): this layer used to be a child of the ⚡ button — i.e. INSIDE
+   the popover — and position:fixed alone could not free it. The popover
+   paints the shipped menu material
+   backdrop-filter: var(--dsw-menu-backdrop-filter) = blur(40px) saturate(150%),
+   and a non-none backdrop-filter makes that element the CONTAINING BLOCK for
+   every fixed/absolute descendant. So the viewport coordinates positionTip
+   computed were re-interpreted against the POPOVER's box (measured in a real
+   browser: a wanted top of 479 landed at 1023 = 544 popover top + 479) and
+   overflow:hidden then clipped the layer away. Hover *did* flip opacity to 1
+   and visibility to visible — nothing was ever painted, which is exactly the
+   "悬停无法显示" symptom.
+   FIX: render the tooltip as a SIBLING of the popover under .cmes-root.
+   That box carries no transform / filter / backdrop-filter, so position:fixed
+   resolves against the viewport again (probe-verified: a fixed box inside the
+   popover reports the popover origin, one inside the root reports 0,0).
+   The tooltip is therefore no longer a descendant of the button, so the old
+   .cmes-fast:hover [role=tooltip] rule could never fire; visibility is a
+   .show class driven by pointer enter/leave + focus/blur instead. */
+.${P}-tip{position:fixed;z-index:1400;padding:7px 12px;white-space:nowrap;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));box-shadow:var(--dsw-elevation-panel);border-radius:10px;font-size:12px;line-height:17px;text-align:center;color:var(--dsw-alias-label-primary);opacity:0;visibility:hidden;pointer-events:none;transform:translateY(2px);transition:opacity .12s ease,transform .12s ease,visibility 0s .12s}
+.${P}-tip.show{opacity:1;visibility:visible;transform:translateY(0);transition:opacity .12s ease,transform .12s ease,visibility 0s}
+/* the reference tooltip is a two-line card: a heavier title over a muted
+   subtitle. The "visual only" disclosure stays for assistive tech only, so the
+   card keeps the reference's two-line shape. */
 .${P}-tip span{display:block;color:var(--dsw-alias-label-secondary)}
-.${P}-tip .${P}-tipTitle{color:var(--dsw-alias-label-primary)}
+.${P}-tip .${P}-tipTitle{color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:18px}
 
 /* ---------- popover ---------- */
 .${P}-popover{position:fixed;bottom:var(--${P}-bottom,40px);left:var(--${P}-left,12px);width:272px;max-width:calc(100vw - 24px);height:var(--${P}-height,104px);max-height:calc(100vh - var(--${P}-bottom,40px) - 12px);padding:0;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));border-radius:14px;box-shadow:var(--dsw-elevation-panel);backdrop-filter:var(--dsw-menu-backdrop-filter);z-index:1100;overflow:hidden;transform-origin:bottom left;transition:opacity .18s ease,transform .18s ease,height .2s cubic-bezier(.2,.8,.2,1),visibility 0s}
@@ -328,6 +347,20 @@ window.__ModuleLoader__.load({
    colours are stamped per level by the component, over the theme's own rail
    base (measured #e8e7e8 in light, the inset #232324 groove in dark). */
 .${P}-rail{position:absolute;left:12px;right:12px;top:65px;height:26px;border-radius:16px;background:var(--${P}-track,#e8e7e8);touch-action:none;cursor:pointer;transition:background .25s ease}
+/* GRAB AREA — the visible knob is 30px tall while the track is only 26px, so
+   the knob's 2px overhang used to be a dead zone: pointer-events:none on the
+   puck meant a press there hit the PANE, no pointerdown reached the rail and the
+   drag never started. That is worst at the far-right stop, where the knob is the
+   only target left on the track ("按住无法滑动"). Fixed STRUCTURALLY, by
+   widening the track's own hit box: this transparent pad covers the whole
+   overhang (and 4px more on each side). Because it is a box of the rail, hit
+   tests land on the rail itself.
+   The knob deliberately stays pointer-events:none: the pad already covers
+   everything the knob overhangs, and keeping the puck transparent to input
+   means the event TARGET never changes while the value slides under the
+   cursor — one stable target for the whole gesture, which is exactly what
+   keeps a drag from being interrupted part-way. */
+.${P}-rail::before{content:"";position:absolute;inset:-6px -3px;border-radius:20px}
 .${P}-rail:focus-visible{outline:2px solid var(--dsw-focus-ring-color,#3989e9);outline-offset:2px}
 .${P}-fill,.${P}-sparks{position:absolute;inset:0 auto 0 0;width:calc((100% - 30px)*var(--${P}-pos,0) + 15px);border-radius:13px 0 0 13px;overflow:hidden;pointer-events:none;transition:width .18s cubic-bezier(.2,.8,.2,1)}
 .${P}-fill{background:var(--${P}-fill,#3a83f7);transition:width .18s cubic-bezier(.2,.8,.2,1),background .25s ease}
@@ -346,15 +379,56 @@ window.__ModuleLoader__.load({
 .${P}-popover.peak .${P}-sparks,.${P}-popover.fast-mode .${P}-sparks{opacity:1}
 .${P}-sp{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;opacity:var(--b,1);transform:scale(var(--b,1));animation:${P}-drift var(--dur,3s) linear infinite;animation-delay:var(--delay,0s)}
 @keyframes ${P}-drift{0%{left:-4%;opacity:0}6%{opacity:var(--b,1)}94%{opacity:var(--b,1)}100%{left:104%;opacity:0}}
-.${P}-knob{position:absolute;left:calc((100% - 30px)*var(--${P}-pos,0));top:-2px;width:30px;height:30px;border-radius:50%;background:var(--${P}-knob,var(--dsw-alias-bg-layer-2,#f8f8f8));box-shadow:var(--dsw-elevation-panel),0 1px 3px var(--${P}-knobShadow,rgba(0,0,0,.10));border:.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.07));pointer-events:none;z-index:2;transition:left .18s cubic-bezier(.2,.8,.2,1)}
-/* while dragging, the knob must track the pointer with NO transition and NO
-   snapping — snapping happens on release. */
-.${P}-rail.dragging .${P}-knob{transition:none}
+
+/* ---------- arrival bloom ----------
+   Reaching the far-right stop fires a ONE-SHOT burst of motes out of the knob,
+   the way the original app does at Ultra. Measured from the recording
+   (523px capture / 1.468 = CSS px): six violet motes leave the knob edge at
+   r≈19px, sit at r≈33px one frame later, r≈44px the frame after, and are gone
+   by the third — so the whole flourish lives ~0.5s and never loops.
+   Two shape facts are taken from the measurement, not invented:
+     • every mote fanned LEFTWARD (angles ±100°..±175°). That is what fits —
+       the knob parks against the card's right edge, so a full circle would be
+       half-clipped — and it is why the burst reads as coming OUT of the track;
+     • the motes travel further horizontally (rx≈44px) than vertically
+       (ry≈22px), matching the measured ellipse.
+   Per-mote offsets and lifetimes are stamped inline from buildBloom, so the
+   burst is deterministic and a re-render never reshuffles a burst in flight. */
+.${P}-bloom{position:absolute;left:calc(100% - 15px);top:13px;width:0;height:0;pointer-events:none;z-index:3}
+.${P}-bp{position:absolute;left:0;top:0;width:var(--sz,4px);height:var(--sz,4px);margin-top:calc(var(--sz,4px) * -0.5);margin-left:calc(var(--sz,4px) * -0.5);border-radius:50%;background:var(--${P}-mote,#c9a9fb);box-shadow:0 0 6px var(--${P}-mote,#c9a9fb);opacity:0;animation:${P}-burst var(--bd,.62s) cubic-bezier(.15,.72,.25,1) var(--bdel,0s) 1 both}
+@keyframes ${P}-burst{
+  0%{opacity:0;transform:translate(var(--x0,0px),var(--y0,0px)) scale(.4)}
+  18%{opacity:var(--bmax,.95)}
+  100%{opacity:0;transform:translate(var(--x1,0px),var(--y1,0px)) scale(.5)}
+}
+/* one soft ring rides out with the motes: it is what makes the burst read as a
+   bloom rather than as scattered dots */
+.${P}-halo{position:absolute;left:0;top:0;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:radial-gradient(circle,var(--${P}-mote,#c9a9fb) 0%,transparent 66%);opacity:0;animation:${P}-haloRing .5s ease-out 1 both}
+@keyframes ${P}-haloRing{0%{opacity:.55;transform:scale(.24)}100%{opacity:0;transform:scale(1.55)}}
+.${P}-knob{position:absolute;left:calc((100% - 30px)*var(--${P}-pos,0));top:-2px;width:30px;height:30px;border-radius:50%;background:var(--${P}-knob,var(--dsw-alias-bg-layer-2,#f8f8f8));box-shadow:var(--dsw-elevation-panel),0 1px 3px var(--${P}-knobShadow,rgba(0,0,0,.10));border:.5px solid var(--dsw-alias-border-l1,rgba(0,0,0,.07));pointer-events:none;z-index:2;transform:scale(1);transform-origin:50% 50%;transition:left .18s cubic-bezier(.2,.8,.2,1),transform .34s cubic-bezier(.34,1.56,.64,1)}
+/* PRESS / RELEASE DEFORMATION.
+   Holding the knob swells it; letting go springs it back through the overshoot
+   curve above. Scale ONLY — no halo ring, no shadow bloom — so the press reads
+   as the knob being picked up rather than as a glow lighting up. The transform
+   origin is the knob's own centre, so the silhouette grows symmetrically about
+   the value it points at and its layout box — the thing the finger-drag maths
+   reads — never moves. */
+.${P}-rail.dragging .${P}-knob{transform:scale(1.16)}
+/* while dragging, the knob must track the pointer with NO left transition and
+   NO snapping — snapping happens on release. The transform transition stays so
+   the press itself still deforms smoothly. */
+.${P}-rail.dragging .${P}-knob{transition:transform .14s cubic-bezier(.2,.9,.3,1.2)}
 .${P}-rail.dragging .${P}-fill{transition:none}
 .${P}-rail.dragging{cursor:grabbing}
 .${P}-noeffort{position:absolute;top:65px;left:12px;right:12px;text-align:center;font-size:12px;line-height:26px;color:var(--dsw-alias-label-secondary)}
 @media (prefers-reduced-motion:reduce){
   .${P}-sp{animation-duration:calc(var(--dur,3s) * 2.6)}
+  /* the arrival burst is pure decoration; collapse it instead of slowing it,
+     because a slow radial burst reads as a rendering glitch */
+  .${P}-bp{animation-duration:.01s;animation-delay:0s}
+  .${P}-halo{animation-duration:.01s}
+  /* the press keeps a smaller, transition-free swell: motion without movement */
+  .${P}-rail.dragging .${P}-knob{transform:scale(1.06);transition:none}
 }
 
 /* ---------- model pane: two-level drill-down ----------
@@ -491,10 +565,55 @@ body[data-ds-dark-theme] .${P}-root{
       return out;
     }
 
+    /* ------------------------------------------------------------------ *
+     * Arrival bloom — the one-shot burst fired when the knob lands on the
+     * far-right stop. Same determinism rules as the dust above: a hash picks
+     * every angle, radius, size and lifetime, so a re-render mid-burst cannot
+     * reshuffle it and two sessions render the identical flourish.
+     *
+     * Geometry follows the measurement (see the CSS block): motes start at the
+     * knob's edge, die at rx≈44px / ry≈22px, are 3-5px across, and fan
+     * leftward-only so the burst stays inside the card at every width.
+     * ------------------------------------------------------------------ */
+    const BLOOM_COUNT = 18;
+    function buildBloom(count) {
+      const out = [];
+      for (let i = 0; i < count; i++) {
+        /* Fan the motes across the LEFT half-plane only (the knob parks against
+           the card's right edge, so a full circle would be half-clipped), and
+           push them away from the pure-horizontal band: a mote that travels
+           straight left is drawn over the vivid fill and disappears, while one
+           that climbs or dips lands on the card's pale surface and reads.
+           Alternating sides keeps the burst symmetric like the recording. */
+        const side = i % 2 === 0 ? 1 : -1;                  // +1 down, -1 up
+        const t = hash01(i * 5 + 2);
+        const deg = side > 0
+          ? 108 + 56 * t                                    // 108..164 down-left
+          : 180 + (72 - 56 * t);                            // 196..252 up-left
+        const ang = deg * Math.PI / 180;
+        const near = 9 + 5 * hash01(i * 11 + 7);            // leaves the knob edge
+        const far = 0.72 + 0.55 * hash01(i * 17 + 3);       // share of the reach
+        const rx = 34 + 12 * hash01(i * 23 + 13);           // 34..46px across
+        const ry = 20 + 9 * hash01(i * 29 + 19);            // 20..29px up/down
+        out.push({
+          key: i,
+          x0: (Math.cos(ang) * near).toFixed(1) + 'px',
+          y0: (Math.sin(ang) * near).toFixed(1) + 'px',
+          x1: (Math.cos(ang) * rx * far).toFixed(1) + 'px',
+          y1: (Math.sin(ang) * ry * far).toFixed(1) + 'px',
+          sz: (3.4 + 2.6 * hash01(i * 31 + 5)).toFixed(1) + 'px',
+          bmax: (0.70 + 0.30 * hash01(i * 37 + 23)).toFixed(2),
+          bd: (0.6 + 0.3 * hash01(i * 41 + 11)).toFixed(2) + 's',
+          bdel: (0.05 * hash01(i * 43 + 17)).toFixed(3) + 's'
+        });
+      }
+      return out;
+    }
+
     /* ================================================================== *
      * Selector component
      * ================================================================== */
-    function Selector({ directory, load, select, available, locked, t }) {
+    function Selector({ directory, load, select, available, locked, t, renderSlot }) {
       const state = useSyncExternalStore(
         fn => directory.subscribe(fn),
         () => directory.getSnapshot()
@@ -512,6 +631,15 @@ body[data-ds-dark-theme] .${P}-root{
       const [busy, setBusy] = useState(false);
       const [query, setQuery] = useState('');
       const [highlight, setHighlight] = useState(0);
+      /* tooltip visibility is state now, not `:hover` CSS: the tooltip has to
+       * live OUTSIDE the popover to escape the backdrop-filter containing block,
+       * so it is no longer a descendant of the ⚡ button and no descendant
+       * selector can reach it (see the CSS block for the full diagnosis). */
+      const [tipOn, setTipOn] = useState(false);
+      /* Bumped when the knob ARRIVES on the far-right stop. Used as the bloom
+       * layer's React key, so each arrival remounts it and the CSS animation
+       * replays from zero instead of resuming a finished one. */
+      const [bloom, setBloom] = useState(0);
       /* Two-level drill-down (replaces the old collapsible-group list).
        * `view` is 1 (provider list) or 2 (that provider's models). */
       const [view, setView] = useState(1);
@@ -526,11 +654,16 @@ body[data-ds-dark-theme] .${P}-root{
       const fastBtnRef = useRef(null);
       const previewRef = useRef(null);
       const dragRef = useRef(false);
+      /* which pointerId owns the active drag (multi-pointer safety) */
+      const pointerRef = useRef(null);
       const busyRef = useRef(false);
       const pendingRef = useRef(null);
       const mountedRef = useRef(true);
       const timersRef = useRef([]);
       const latest = useRef({});
+      /* The index the popover last showed, so the bloom fires on the ARRIVAL
+       * transition only — not on every render that happens to sit at the end. */
+      const seenIndexRef = useRef(null);
 
       /* ---------- derive catalog state ---------- */
       const selection = state.pending || state.current;
@@ -551,19 +684,26 @@ body[data-ds-dark-theme] .${P}-root{
       const modelName = model?.name || selection?.model || t('choose');
       const disabled = Boolean(locked || !available);
       const sparkles = useMemo(() => buildSparkles(22), []);
+      const bloomMotes = useMemo(() => buildBloom(BLOOM_COUNT), []);
+      const isLastStop = efforts.length > 1 && index === efforts.length - 1;
+      const tipShown = tipOn && open && pane === 'effort';
 
       latest.current = { open: present, fast, peak, pane, efforts, index, savedEffort, view };
 
-      /* Issue 4: place the Fast tooltip in the viewport, above its button. */
-      function positionTip(event) {
+      /* Place the Fast tooltip in the VIEWPORT, above its button.
+       * Only correct because the tooltip now lives under `.cmes-root`; while it
+       * sat inside the popover these coordinates were resolved against the
+       * popover and the layer was clipped away. */
+      function positionTip() {
         const tip = tipRef.current;
-        const btn = event?.currentTarget ?? fastBtnRef.current;
+        const btn = fastBtnRef.current;
         if (!tip || !btn) return;
         const r = btn.getBoundingClientRect();
-        const tw = tip.offsetWidth || 160;
+        const tw = tip.offsetWidth || 120;
+        const th = tip.offsetHeight || 44;
         const left = Math.max(8, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 8));
         tip.style.left = `${left}px`;
-        tip.style.top = `${Math.max(8, r.top - (tip.offsetHeight || 56) - 6)}px`;
+        tip.style.top = `${Math.max(8, r.top - th - 7)}px`;
       }
 
       /* ---------- effects ---------- */
@@ -582,6 +722,78 @@ body[data-ds-dark-theme] .${P}-root{
           timersRef.current.forEach(clearTimeout);
         };
       }, []);
+
+      /* The tooltip is measured AFTER it is in the DOM. Positioning it in the
+       * hover handler was a second, hidden defect: on the very first hover the
+       * layer had never been laid out, so `offsetWidth/offsetHeight` fell back
+       * to the placeholder numbers and the card was placed with a guessed size
+       * and guessed height. A layout effect always sees real metrics. */
+      useLayoutEffect(() => {
+        if (!tipShown) return;
+        positionTip();
+        const settle = () => positionTip();
+        window.addEventListener('resize', settle);
+        document.addEventListener('scroll', settle, true);
+        return () => {
+          window.removeEventListener('resize', settle);
+          document.removeEventListener('scroll', settle, true);
+        };
+      }, [tipShown]);
+
+      /* the tooltip must never outlive the state that anchors it */
+      useEffect(() => { if (!open) setTipOn(false); }, [open]);
+      useEffect(() => { if (pane !== 'effort') setTipOn(false); }, [pane]);
+
+      /* ARRIVAL BLOOM — fires on the transition INTO the far-right stop while
+       * the popover is open. A drag, a track click, `End`, or the reset button
+       * all funnel through `index`, so every route to the end blooms exactly
+       * once. Opening the popover already parked at the end must NOT bloom,
+       * which is why the first observed index of each open is only recorded. */
+      useEffect(() => {
+        if (!open) { seenIndexRef.current = null; return; }
+        if (seenIndexRef.current === null) { seenIndexRef.current = index; return; }
+        const arrived = index === efforts.length - 1 && seenIndexRef.current !== index;
+        seenIndexRef.current = index;
+        if (arrived) setBloom(n => n + 1);
+      }, [index, open, efforts.length]);
+
+      /* THE GESTURE IS OWNED BY THE DOCUMENT, not by the rail.
+       *
+       * Pointer capture alone is not a reliable owner: it is dropped whenever
+       * the capturing element is replaced, the press starts a native drag or a
+       * text selection, the pointer leaves the window, or the browser decides to
+       * take the gesture away (all of which fire `pointercancel` /
+       * `lostpointercapture`). When that happens the rail simply stops hearing
+       * `pointermove` and the drag freezes mid-way — reported as "按住拖到一半
+       * 就变成无法选中".
+       *
+       * So while a drag is live we listen on the DOCUMENT in the capture phase.
+       * Capture-phase listeners on the document see every pointer event
+       * regardless of capture retargeting, so the drag keeps tracking the
+       * pointer even if the rail itself never receives the event. The rail's own
+       * handler becomes hover-only (the drag branch returns early), so each
+       * pointermove is applied exactly once. */
+      useEffect(() => {
+        if (!dragging) return;
+        const owns = e => pointerRef.current === null || e.pointerId === pointerRef.current;
+        const move = e => { if (owns(e) && dragRef.current) applyPointer(e.clientX); };
+        const up = e => { if (owns(e) && dragRef.current) finish(e); };
+        const cancel = e => { if (owns(e) && dragRef.current) cancelDrag(); };
+        /* A release outside the window never reaches the document; focus loss is
+         * the only signal we get, and the gesture must not stay latched. */
+        const blur = () => { if (dragRef.current) finish(); };
+        document.addEventListener('pointermove', move, true);
+        document.addEventListener('pointerup', up, true);
+        document.addEventListener('pointercancel', cancel, true);
+        window.addEventListener('blur', blur);
+        return () => {
+          document.removeEventListener('pointermove', move, true);
+          document.removeEventListener('pointerup', up, true);
+          document.removeEventListener('pointercancel', cancel, true);
+          window.removeEventListener('blur', blur);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [dragging]);
 
       /* peak-entry flourish: show the warning, then settle */
       function enterPeak() {
@@ -744,6 +956,9 @@ body[data-ds-dark-theme] .${P}-root{
       }
       function nearestIndex(clientX) {
         if (efforts.length < 2) return 0;
+        /* A missing/non-numeric coordinate can only mean "no pointer position";
+         * resolving it to the CURRENT stop keeps every caller on the ladder. */
+        if (!Number.isFinite(clientX)) return Math.max(0, index);
         return Math.round(fractionAt(clientX) * (efforts.length - 1));
       }
       /* Pixel position of the knob centre for a continuous fraction. */
@@ -788,6 +1003,18 @@ body[data-ds-dark-theme] .${P}-root{
         rail.style.setProperty(`--${P}-pos`, String(stopFraction(i)));
       }
 
+      /* ONE place applies a pointer position to the rail. Called by the press
+       * and by the document-level move listener below, so both routes produce
+       * exactly the same value (continuous, no snapping while down). */
+      function applyPointer(clientX) {
+        const frac = fractionAt(clientX);
+        liveRef.current = frac;
+        paintLive(frac);
+        const i = Math.round(frac * (efforts.length - 1));
+        const id = efforts[i]?.id;
+        if (id && id !== previewRef.current) showEffort(id);
+      }
+
       function pointerDown(event) {
         /* Deliberately NOT gated on `busyRef`. An in-flight commit must never
          * make the rail ungrabbable — that was a large part of the "sometimes
@@ -795,50 +1022,55 @@ body[data-ds-dark-theme] .${P}-root{
          * one simply supersedes it. Only a genuinely non-interactive rail
          * (disabled session / single level) refuses the gesture. */
         if (disabled || efforts.length < 2) return;
-        event.currentTarget.focus({ preventScroll: true });
-        /* BUG FIX (issue 6): capture can throw if the pointer is already gone
-         * (or the element was re-rendered); an uncaught throw here aborted the
-         * handler *before* dragRef was set, which is exactly the "sometimes I
-         * cannot grab it" symptom. Guard it and keep going. */
+        /* Suppress the browser's own press-drag defaults (text selection, native
+         * drag-and-drop). Those default actions are what fire `pointercancel`
+         * and silently kill a drag mid-gesture — the "拖动中途变成无法选中" bug. */
+        event.preventDefault();
+        railRef.current?.focus({ preventScroll: true });
+        /* Pointer capture is a convenience, NOT the mechanism: the gesture is
+         * owned by the document listener below, so losing capture (or never
+         * being granted it) can no longer strand a drag. */
         try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* non-fatal */ }
         dragRef.current = true;
+        pointerRef.current = event.pointerId;
         setDragging(true);
         setHovered(-1);
-        const frac = fractionAt(event.clientX);
-        liveRef.current = frac;
-        paintLive(frac);
-        showEffort(efforts[nearestIndex(event.clientX)].id);
+        applyPointer(event.clientX);
       }
 
+      /* Hover feedback only. The drag branch lives in the document listener, so
+       * a moved pointer is applied exactly once per event. */
       function pointerMove(event) {
-        if (dragRef.current) {
-          /* Continuous tracking — no snap while the pointer is down. */
-          const frac = fractionAt(event.clientX);
-          liveRef.current = frac;
-          paintLive(frac);
-          const i = Math.round(frac * (efforts.length - 1));
-          const id = efforts[i]?.id;
-          if (id && id !== previewRef.current) showEffort(id);
-        } else {
-          const i = nearestIndex(event);
-          const box = railRef.current?.getBoundingClientRect();
-          if (!box) return;
-          const tickX = box.left + 15 + i / Math.max(1, efforts.length - 1) * (box.width - 30);
-          setHovered(Math.abs(event.clientX - tickX) < 10 && i !== index ? i : -1);
-        }
+        if (dragRef.current) return;
+        /* BUG FIX: this used to pass the EVENT OBJECT where a clientX was
+         * expected, so the mapping was NaN and the "you are near this tick"
+         * highlight never fired at all. Pass the coordinate. */
+        const i = nearestIndex(event.clientX);
+        const box = railRef.current?.getBoundingClientRect();
+        if (!box) return;
+        const tickX = box.left + 15 + i / Math.max(1, efforts.length - 1) * (box.width - 30);
+        setHovered(Math.abs(event.clientX - tickX) < 10 && i !== index ? i : -1);
       }
 
       function finish(event) {
         if (!dragRef.current) return;
         dragRef.current = false;
+        pointerRef.current = null;
         setDragging(false);
         liveRef.current = null;
         /* Issue 3: snap the knob onto the nearest stop. Writing the snapped
          * fraction here is what guarantees the knob SETTLES — relying on
          * React's next render is not enough, because releasing on the level
          * that was already previewed produces identical state and React bails
-         * out without rewriting the variable. The CSS transition animates it. */
-        const i = nearestIndex(event ? event.clientX : NaN);
+         * out without rewriting the variable. The CSS transition animates it.
+         *
+         * A pointerup WITHOUT coordinates (a synthesised release, a lost
+         * capture, a programmatic settle) must resolve to the stop the knob is
+         * already on. `nearestIndex(NaN)` would return NaN and `snapLive(NaN)`
+         * would write `--${P}-pos: NaN`, which makes the knob's `left:calc(...)`
+         * invalid and throws the knob across the track. */
+        const known = event != null && Number.isFinite(event.clientX);
+        const i = known ? nearestIndex(event.clientX) : index;
         snapLive(i);
         const target = efforts[i] ?? efforts[index];
         if (target) chooseEffort(target.id);
@@ -849,6 +1081,7 @@ body[data-ds-dark-theme] .${P}-root{
       function cancelDrag() {
         if (!dragRef.current) return;
         dragRef.current = false;
+        pointerRef.current = null;
         setDragging(false);
         liveRef.current = null;
         previewRef.current = null;
@@ -1039,7 +1272,16 @@ body[data-ds-dark-theme] .${P}-root{
           onClick: () => chooseModel(activeProvider.id, m)
         },
           h('span', { className: `${P}-modelName` },
-            h('span', null, m.name || m.id),
+            /* the same label child slot, in its `option` placement, so a
+             * decoration that exists in the shipped list also shows here
+             * (catalog name is the fallback) */
+            h('span', null,
+              renderSlot
+                ? renderSlot('conversation.input.model.label', {
+                    provider: { id: activeProvider.id, name: activeProvider.name },
+                    model: m, placement: 'option', selected
+                  }, { fallback: m.name || m.id })
+                : (m.name || m.id)),
             h('span', { className: `${P}-cnt` }, levelCount ? `${levelCount} 档` : '不支持')),
           icon('check', `${P}-ck`));
       });
@@ -1094,19 +1336,19 @@ body[data-ds-dark-theme] .${P}-root{
           className: `${P}-tool ${P}-fast${fast ? ' active' : ''}`,
           ref: fastBtnRef,
           'aria-label': t('fast'), 'aria-pressed': fast,
-          onMouseEnter: positionTip, onFocus: positionTip,
+          'aria-describedby': 'cmes-fast-tip',
+          /* The tooltip CANNOT be a child of this button: the popover's
+           * backdrop-filter would make itself the containing block for a fixed
+           * descendant and clip it away. It is rendered at the root (see the
+           * return value) and revealed through `tipOn`. */
+          onPointerEnter: () => setTipOn(true),
+          onPointerLeave: () => setTipOn(false),
+          onFocus: () => setTipOn(true),
+          onBlur: () => setTipOn(false),
           onClick: () => setFast(v => !v)
         },
           h('svg', { viewBox: '0 0 24 24', 'aria-hidden': true, style: { width: 15, height: 17, fill: fast ? 'currentColor' : 'none', stroke: 'currentColor', strokeWidth: fast ? 0.7 : 1.5, strokeLinejoin: 'round' } },
-            h('path', { d: ICON.bolt })),
-          /* Issue 4: the tooltip must escape the popover's `overflow:hidden`.
-           * A fixed-position layer is placed by `positionTip` (above the
-           * button, clamped into the viewport) rather than being an in-flow
-           * child that the popover would clip. */
-          h('span', { role: 'tooltip', className: `${P}-tip`, ref: tipRef },
-            h('span', { className: `${P}-tipTitle` }, t('fast')),
-            h('span', null, t('usage')),
-            h('span', null, t('visual')))),
+            h('path', { d: ICON.bolt }))),
 
         h('button', {
           className: `${P}-modelLink`, onClick: () => setPane('models'),
@@ -1137,6 +1379,10 @@ body[data-ds-dark-theme] .${P}-root{
                 [`--${P}-track`]: trackFor(fillFor(displayed, dark), dark),
                 [`--${P}-ink`]: inkFor(displayed, dark),
                 [`--${P}-dot`]: 'var(--dsw-alias-label-caption,#b6b6b8)',
+                /* the bloom's motes are the CURRENT level's colour lifted
+                 * toward white — for Ultra that lands on the measured
+                 * #ceb0fa-ish violet without a second hard-coded table */
+                [`--${P}-mote`]: mixHex(fillFor(displayed, dark), '#ffffff', dark ? 0.30 : 0.42),
                 /* one unitless fraction drives both knob and fill */
                 [`--${P}-pos`]: fraction
               },
@@ -1162,6 +1408,23 @@ body[data-ds-dark-theme] .${P}-root{
                   key: s.key, className: `${P}-sp`,
                   style: { top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
                 }))),
+              /* the arrival bloom: keyed on the arrival counter, so mounting a
+               * new key restarts every mote's animation from 0% */
+              bloom
+                ? h('div', {
+                    key: `bloom-${bloom}`, className: `${P}-bloom`, 'aria-hidden': true
+                  },
+                    h('i', { className: `${P}-halo` }),
+                    ...bloomMotes.map(m => h('i', {
+                      key: m.key, className: `${P}-bp`,
+                      style: {
+                        [`--x0`]: m.x0, [`--y0`]: m.y0,
+                        [`--x1`]: m.x1, [`--y1`]: m.y1,
+                        [`--sz`]: m.sz, [`--bmax`]: m.bmax,
+                        [`--bd`]: m.bd, [`--bdel`]: m.bdel
+                      }
+                    })))
+                : null,
               h('div', { className: `${P}-knob` }))
           : h('div', { className: `${P}-noeffort` }, t('unsupported')));
 
@@ -1182,7 +1445,21 @@ body[data-ds-dark-theme] .${P}-root{
         },
           fast ? h('svg', { className: `${P}-bolt`, viewBox: '0 0 24 24', 'aria-hidden': true }, h('path', { d: ICON.bolt })) : null,
           h('span', { className: `${P}-compact` }, icon('model')),
-          h('span', { className: `${P}-caption` }, modelName,
+          h('span', { className: `${P}-caption` },
+            /* DSH 0.2.1-rc.2 gives the seat a child slot,
+             * `conversation.input.model.label`, for inline label decoration
+             * (the shipped 1017 badge registers into it). Shadowing the parent
+             * seat without declaring that child would make the extension's
+             * `slots.inject` wait forever and the badge would silently vanish,
+             * so we declare it in the registration and render it here, with the
+             * catalog name as the fallback. `renderSlot` only exists when the
+             * entry declares children, so 0.2.0 hosts keep the plain name. */
+            model && renderSlot
+              ? renderSlot('conversation.input.model.label', {
+                  provider: { id: group?.id, name: group?.name },
+                  model, placement: 'trigger', selected: true
+                }, { fallback: modelName })
+              : modelName,
             triggerLabel ? h('span', { className: `${P}-triggerEffort` }, ` ${triggerLabel}`) : null),
           icon('down', `${P}-chev`)),
 
@@ -1201,7 +1478,25 @@ body[data-ds-dark-theme] .${P}-root{
           effortView,
           busy ? h('div', { className: `${P}-sr`, role: 'status' }, t('busy')) : null,
           status ? h('div', { className: `${P}-status`, role: 'alert', style: { position: 'absolute', left: 12, right: 12, bottom: 6, color: 'var(--dsw-alias-state-error-primary)' } },
-            h('span', null, status)) : null));
+            h('span', null, status)) : null),
+
+        /* THE FAST TOOLTIP — a sibling of the popover, NOT a descendant of it.
+         * The popover's backdrop-filter makes it the containing block for fixed
+         * descendants and its `overflow:hidden` then clips them, which is why
+         * hovering used to reveal nothing at all. `.cmes-root` has no
+         * transform/filter, so `position:fixed` here is viewport-relative and
+         * nothing clips it. It is portalled no further than this wrapper, which
+         * keeps it inside the plugin's own tree (no react-dom dependency). */
+        h('span', {
+          role: 'tooltip', id: 'cmes-fast-tip',
+          className: `${P}-tip${tipShown ? ' show' : ''}`,
+          ref: tipRef, 'aria-hidden': tipShown ? undefined : 'true'
+        },
+          h('span', { className: `${P}-tipTitle` }, t('fast')),
+          h('span', null, t('usage')),
+          /* the reference card is two lines; the honesty note stays discoverable
+           * by assistive tech rather than being deleted outright */
+          h('span', { className: `${P}-sr` }, t('visual'))));
     }
 
     /* ================================================================== *
@@ -1214,6 +1509,21 @@ body[data-ds-dark-theme] .${P}-root{
         ctx.slots.inject('conversation.input.model', () => ctx.slots.register({
           name: 'conversation.input.model',
           locale: NS,
+          /* DSH 0.2.1-rc.2: a seat entry also DECLARES its child slots, and the
+           * child exists only while the declaring entry is mounted. The shipped
+           * selector declares `conversation.input.model.label` here so plugins
+           * can decorate the model name; other shipped packages (the 1017 badge)
+           * register into it, and `slots.inject` parks a contributor until the
+           * slot is declared at all. Shadowing the parent seat and NOT declaring
+           * the child therefore drops those contributions silently, so we
+           * declare the same child with the same shape. Declaring it also makes
+           * the renderer hand this component a `renderSlot` binding (see the
+           * trigger), which is what keeps the decoration visible. */
+          children: {
+            'conversation.input.model.label': {
+              kind: 'single', scope: 'session', inline: true
+            }
+          },
           /* `conversation.input.model` is a `kind: 'single'` slot that the shipped
            * `@deepseek-ai/dsh-client-ui-model-selection` ModelSelect already
            * occupies at priority 0. A `single` slot permits only ONE entry per
@@ -1221,7 +1531,10 @@ body[data-ds-dark-theme] .${P}-root{
            * would fail the whole plugin load. Shadowing is by design here: the
            * projection keeps the lowest-priority entry of the cell, so -1 wins
            * the seat and the shipped selector stays on the ledger untouched —
-           * uninstalling this plugin restores it with no residue. */
+           * uninstalling this plugin restores it with no residue. (0.2.1 also
+           * re-ranks dynamically loaded packages onto its own shadowing ladder,
+           * so an explicit -1 stays the right static-profile value without ever
+           * colliding with an auto-assigned rank.) */
           priority: -1,
           inject(sessionId) {
             const directory = ctx.modelDirectories.directoryFor(sessionId);

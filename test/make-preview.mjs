@@ -44,6 +44,12 @@ body{margin:0;padding:24px;background:#f8f8f8;font-family:"Segoe UI Variable Tex
 .hostList{width:272px}
 .hostList .${P}-popover{position:static !important;bottom:auto !important;left:auto !important;top:auto !important}
 .wrap{position:relative;display:inline-block}
+/* The arrival bloom is a one-shot CSS animation; freeze it at its end offsets
+   so the static page can show the burst without a video. */
+.${P}-bp{animation:none !important;opacity:.9;transform:translate(var(--x1),var(--y1)) scale(.72)}
+.${P}-halo{animation:none !important;opacity:.30;transform:scale(1.15)}
+/* grabbable-knob state for the press shot */
+.${P}-rail.dragging .${P}-knob{transform:scale(1.16)}
 `;
 
 // ---- markup: mirror the component's output for each state ----
@@ -109,6 +115,28 @@ const CHROME = {
     dotPassed: '#f9fafb', accentPeak: '#c39bff'
   }
 };
+/* Arrival-bloom motes — the SAME hash + ellipse maths as client.js's
+   `buildBloom`, frozen at their end offsets so a static page can show the
+   burst (the harness CSS above disables the two animations). */
+function bloomMotes(count = 18) {
+  const hash01 = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  let out = `<i class="${P}-halo"></i>`;
+  for (let i = 0; i < count; i++) {
+    const side = i % 2 === 0 ? 1 : -1;
+    const t = hash01(i * 5 + 2);
+    const deg = side > 0 ? 108 + 56 * t : 180 + (72 - 56 * t);
+    const ang = deg * Math.PI / 180;
+    const far = 0.72 + 0.55 * hash01(i * 17 + 3);
+    const rx = 34 + 12 * hash01(i * 23 + 13);
+    const ry = 20 + 9 * hash01(i * 29 + 19);
+    const x1 = (Math.cos(ang) * rx * far).toFixed(1);
+    const y1 = (Math.sin(ang) * ry * far).toFixed(1);
+    const sz = (3.4 + 2.6 * hash01(i * 31 + 5)).toFixed(1);
+    out += `<i class="${P}-bp" style="--x0:0px;--y0:0px;--x1:${x1}px;--y1:${y1}px;--sz:${sz}px"></i>`;
+  }
+  return out;
+}
+
 function mixHex(a, b, t) {
   const pa = [1, 3, 5].map(i => parseInt(a.substr(i, 2), 16));
   const pb = [1, 3, 5].map(i => parseInt(b.substr(i, 2), 16));
@@ -131,29 +159,41 @@ function effortPane(index, opts = {}) {
     `--${P}-fill:${fill[e.id]}`,
     `--${P}-track:${mixHex(RAIL_BASE[theme], fill[e.id], 0.22)}`,
     `--${P}-dot:var(--dsw-alias-label-caption,#b6b6b8)`,
+    `--${P}-mote:${mixHex(fill[e.id], '#ffffff', theme === 'dark' ? 0.30 : 0.42)}`,
     `--${P}-pos:${pos}`
   ].join(';');
+  /* The tooltip is a SIBLING of the popover (inside `.cmes-root`), not a child
+     of the ⚡ button: the popover's backdrop-filter makes it the containing
+     block for fixed descendants. The preview pins it with absolute coordinates
+     so a static page can show the state the plugin reaches at hover time. */
+  const tip = opts.tip
+    ? `<span class="${P}-tip show" role="tooltip" style="position:absolute;left:-14px;top:-58px">
+         <span class="${P}-tipTitle">1.5 倍速</span><span>用量更多</span><span class="${P}-sr">(仅视觉效果)</span>
+       </span>`
+    : '';
+  const bloom = opts.bloom
+    ? `<div class="${P}-bloom">${bloomMotes()}</div>`
+    : '';
   return `
   <div class="${P}-root" data-theme="${theme}">
-  <div class="${P}-popover${peak ? ' peak' : ''}${message ? ' message' : ''}" style="--${P}-ink:${ink[e.id]}">
+  <div class="${P}-popover${peak ? ' peak' : ''}${message ? ' message' : ''}${opts.fast ? ' fast-mode' : ''}${opts.dragging ? ' dragging' : ''}" style="--${P}-ink:${ink[e.id]}">
     <div class="${P}-pane ${P}-main">
-      <button class="${P}-tool ${P}-fast${opts.fast ? ' active' : ''}">${svg(I.bolt, '15px')}
-        <span class="${P}-tip"><span class="${P}-tipTitle">1.5 倍速</span><span>用量更多</span><span>(仅视觉效果)</span></span>
-      </button>
+      <button class="${P}-tool ${P}-fast${opts.fast ? ' active' : ''}">${svg(I.bolt, '15px')}</button>
       <button class="${P}-modelLink">
         ${title}
         <span class="${P}-modelName">${modelName(opts)}</span>
       </button>
       <div class="${P}-warning"><span>更快消耗使用额度</span></div>
       <button class="${P}-tool ${P}-reset">${svg(I.reset, '16px')}</button>
-      <div class="${P}-rail" style="${railStyle}">
+      <div class="${P}-rail${opts.dragging ? ' dragging' : ''}" style="${railStyle}">
         <div class="${P}-fill"></div>
         ${dots}
         <div class="${P}-sparks">${sparkles()}</div>
+        ${bloom}
         <div class="${P}-knob"></div>
       </div>
     </div>
-  </div></div>`;
+  </div>${tip}</div>`;
 }
 function modelName(opts) { return opts.model || '6 Astra'; }
 
@@ -301,6 +341,12 @@ const html = `<!DOCTYPE html>
     ${EFFORTS.map((_, i) => `<div class="host">${effortPane(i, { theme: 'light' })}</div>`).join('')}
     <div class="label">浅色 · Ultra 进入瞬间（警示态）</div>
     <div class="host">${effortPane(6, { theme: 'light', message: true })}</div>
+    <div class="label">浅色 · ⚡ 悬浮说明（两行卡片，弹层之外）</div>
+    <div class="host" style="height:150px;margin-top:72px">${effortPane(4, { theme: 'light', tip: true })}</div>
+    <div class="label">浅色 · 抵达最右端 · 粒子绽放（冻结在扩散点）</div>
+    <div class="host" style="height:150px">${effortPane(6, { theme: 'light', bloom: true })}</div>
+    <div class="label">浅色 · 按住旋钮（只放大，不加光环）</div>
+    <div class="host" style="height:150px">${effortPane(4, { theme: 'light', dragging: true })}</div>
   </div>
   <div class="col stageDark">
     <div class="label">深色 · Effort pane · 全部 7 档（每档一色）</div>
