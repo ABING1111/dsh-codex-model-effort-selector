@@ -77,6 +77,14 @@ measurements are in [`docs/SPEC.md`](docs/SPEC.md).
 - **Fast toggle** (⚡): visual only — it does **not** change real speed or usage
 - **Reset** button: restores the model's default level
 
+#### Fast on / off
+
+![Fast toggle compared on and off](docs/images/fast.png)
+
+The same `high` level, side by side — the ⚡ turns from an outline into a solid bolt, the rail
+lights up with stardust particles, and the collapsed seat grows its own ⚡. None of it changes
+real speed or usage.
+
 ### Model pane (two-level drill-down)
 
 ![Model pane drill-down](docs/images/model-panel.png)

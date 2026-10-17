@@ -69,6 +69,13 @@ function svg(d, size, extra = '') {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" style="width:${size};height:${size};flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"${extra}><path d="${d}"/></svg>`;
 }
 
+/* The bolt icon is the one glyph whose rendering changes with state: the
+   component swaps `fill:none` + a 1.7 stroke for a SOLID bolt with a 0.7
+   stroke when Fast is on. Mirrored here so the shots show the real thing. */
+function boltSvg(fast) {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" style="width:15px;height:17px;flex:none;fill:${fast ? 'currentColor' : 'none'};stroke:currentColor;stroke-width:${fast ? '0.7' : '1.5'};stroke-linejoin:round"><path d="${ICON.bolt}"/></svg>`;
+}
+
 /* deterministic sparkles — same golden-ratio + hash scheme as client.js */
 function sparkles(count = 22) {
   const PHI = 0.6180339887498949;
@@ -108,7 +115,7 @@ function effortPane(id, opts = {}) {
   <div class="${P}-root">
   <div class="${P}-popover${peak ? ' peak' : ''}${opts.message ? ' message' : ''}${opts.fast ? ' fast-mode' : ''}" style="--${P}-ink:${INK[id]}">
     <div class="${P}-pane ${P}-main">
-      <button class="${P}-tool ${P}-fast${opts.fast ? ' active' : ''}">${svg(ICON.bolt, '15px')}
+      <button class="${P}-tool ${P}-fast${opts.fast ? ' active' : ''}">${boltSvg(!!opts.fast)}
         <span class="${P}-tip"><span class="${P}-tipTitle">1.5 倍速</span><span>用量更多</span><span>(仅视觉效果)</span></span>
       </button>
       <button class="${P}-modelLink">
@@ -189,10 +196,17 @@ function modelsPane({ query = '', view = 1, sub = null, height = null } = {}) {
   </div></div>`;
 }
 
-function trigger(id, model = '6 Astra') {
+function trigger(id, model = '6 Astra', opts = {}) {
   const e = EFFORTS[idxOf(id)];
+  const fast = !!opts.fast;
+  /* The real component only renders the bolt in the collapsed seat while Fast
+     is on (`fast ? h('svg', { className: '-bolt' }) : null`). */
+  const bolt = fast
+    ? `<svg class="${P}-bolt" viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:16px"><path d="${ICON.bolt}"/></svg>`
+    : '';
   return `<div class="${P}-root" style="display:inline-flex">
-  <button class="${P}-trigger${id === 'max' ? ' peak' : ''}" style="--${P}-ink:${INK[id]}">
+  <button class="${P}-trigger${id === 'max' ? ' peak' : ''}${fast ? ' fast' : ''}" style="--${P}-ink:${INK[id]}">
+    ${bolt}
     <span class="${P}-caption">${model} <span class="${P}-triggerEffort">${e.label}</span></span>
     ${svg(ICON.down, '12px').replace('style="', `class="${P}-chev" style="`)}
   </button></div>`;
@@ -340,7 +354,67 @@ shots.push({
   `, 1180, 620)
 });
 
-/* 4. fast tooltip + ultra warning */
+/* 4. Fast: the same non-Ultra stop with Fast off and on, plus the collapsed
+   seat. Using `high` (not Ultra) isolates what Fast alone changes, so the
+   particles cannot be mistaken for the peak treatment. */
+shots.push({
+  name: 'fast',
+  w: 1160, h: 392,
+  html: page('fast mode', `
+  <div style="position:absolute;inset:0;background:#f4f6fa"></div>
+  <div style="position:absolute;left:48px;top:32px;font-size:19px;font-weight:650;color:#0f1116">Fast 开关 · 开 / 关对比</div>
+  <div style="position:absolute;left:48px;top:62px;font-size:13px;color:#5b6270">
+    同一个「高」档位下对比：⚡ 由描边变实心、轨道亮起星尘粒子，收起态也多一颗 ⚡
+  </div>
+
+  <div style="position:absolute;left:48px;top:118px;display:flex;gap:32px;align-items:flex-start">
+    <div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#7c8290;margin-bottom:10px">FAST 关</div>
+      <div class="host" style="width:272px;height:120px">${effortPane('high', { fast: false })}</div>
+      <div style="margin-top:16px;font-size:11px;font-weight:700;letter-spacing:.1em;color:#7c8290;margin-bottom:10px">收起态</div>
+      <div>${trigger('high')}</div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#3988f6;margin-bottom:10px">FAST 开</div>
+      <div class="host" style="width:272px;height:120px">${effortPane('high', { fast: true })}</div>
+      <div style="margin-top:16px;font-size:11px;font-weight:700;letter-spacing:.1em;color:#7c8290;margin-bottom:10px">收起态</div>
+      <div>${trigger('high', '6 Astra', { fast: true })}</div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:790px;top:118px;width:320px">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#7c8290;margin-bottom:12px">FAST 改变什么</div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:11px">
+        <div style="width:3px;border-radius:2px;background:#3988f6;flex:none"></div>
+        <div style="font-size:13px;color:#3c414a;line-height:1.6">
+          <b style="color:#0f1116">⚡ 图标变实心</b><br>描边 1.7 → 填充实心 + 0.7 细描边，并染成蓝色
+        </div>
+      </div>
+      <div style="display:flex;gap:11px">
+        <div style="width:3px;border-radius:2px;background:#3988f6;flex:none"></div>
+        <div style="font-size:13px;color:#3c414a;line-height:1.6">
+          <b style="color:#0f1116">轨道亮起星尘</b><br>粒子原本只在 Ultra 出现，Fast 让<b>任何档位</b>都能亮起
+        </div>
+      </div>
+      <div style="display:flex;gap:11px">
+        <div style="width:3px;border-radius:2px;background:#3988f6;flex:none"></div>
+        <div style="font-size:13px;color:#3c414a;line-height:1.6">
+          <b style="color:#0f1116">收起态多一颗 ⚡</b><br>输入框上的按钮同时出现闪电图标
+        </div>
+      </div>
+      <div style="display:flex;gap:11px">
+        <div style="width:3px;border-radius:2px;background:#b6b6b8;flex:none"></div>
+        <div style="font-size:13px;color:#3c414a;line-height:1.6">
+          <b style="color:#0f1116">不改变真实速度或用量</b><br>纯视觉效果 —— 与 Ultra 的额度警示一样只是表达
+        </div>
+      </div>
+    </div>
+  </div>
+  `, 1160, 392)
+});
+
+/* 5. fast tooltip + ultra warning */
 shots.push({
   name: 'details',
   w: 800, h: 470,
