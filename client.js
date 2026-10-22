@@ -1625,38 +1625,47 @@ body[data-ds-dark-theme] .${P}-root{
      * Plugin
      * ================================================================== */
     return {
-      inject: ['slots', 'modelDirectories', 'sessions', 'locale'],
+      /* ModelDirectoryResolver (ctx.modelDirectories) is a cordis Service whose
+       * own fiber declares
+       *   static inject = ['sessions', 'remote', 'remote.session'];
+       * A caller re-entering the service through the proxy runs on the CALLER's
+       * fiber, so this plugin must inject the same names. Without them the
+       * first directoryFor() throws "cannot get property \"remote.session\"
+       * without inject" and the seat crashes at render time. The shipped
+       * model-selection package declares `@deepseek-ai/dsh-api-remotes` in
+       * dsh.client.inject for exactly this reason (it provides both `remote`
+       * and `remote.session`); package.json mirrors that here. */
+      inject: ['slots', 'modelDirectories', 'sessions', 'locale', 'remote', 'remote.session'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh, en }));
         ctx.slots.inject('conversation.input.model', () => ctx.slots.register({
           name: 'conversation.input.model',
           locale: NS,
-          /* DSH 0.2.1-rc.2: a seat entry also DECLARES its child slots, and the
-           * child exists only while the declaring entry is mounted. The shipped
-           * selector declares `conversation.input.model.label` here so plugins
-           * can decorate the model name; other shipped packages (the 1017 badge)
-           * register into it, and `slots.inject` parks a contributor until the
-           * slot is declared at all. Shadowing the parent seat and NOT declaring
-           * the child therefore drops those contributions silently, so we
-           * declare the same child with the same shape. Declaring it also makes
-           * the renderer hand this component a `renderSlot` binding (see the
-           * trigger), which is what keeps the decoration visible. */
-          children: {
-            'conversation.input.model.label': {
-              kind: 'single', scope: 'session', inline: true
-            }
-          },
-          /* `conversation.input.model` is a `kind: 'single'` slot that the shipped
-           * `@deepseek-ai/dsh-client-ui-model-selection` ModelSelect already
-           * occupies at priority 0. A `single` slot permits only ONE entry per
-           * priority and `register()` throws otherwise, so registering at 0
-           * would fail the whole plugin load. Shadowing is by design here: the
-           * projection keeps the lowest-priority entry of the cell, so -1 wins
-           * the seat and the shipped selector stays on the ledger untouched —
-           * uninstalling this plugin restores it with no residue. (0.2.1 also
-           * re-ranks dynamically loaded packages onto its own shadowing ladder,
-           * so an explicit -1 stays the right static-profile value without ever
-           * colliding with an auto-assigned rank.) */
+          /* Deliberately NO `children` here.
+           *
+           * Declaring `conversation.input.model.label` used to look necessary
+           * (the shipped 1017 badge registers into it), but in this host the
+           * shipped @deepseek-ai/dsh-client-ui-model-selection entry REMAINS
+           * MOUNTED even when our priority:-1 shadows it, and it declares the
+           * same child itself. SlotCore.register() rejects a child slot declared
+           * by two entries:
+           *
+           *   if (e.children) for (const h of Object.keys(e.children)) {
+           *     const m = this.records.get(h);
+           *     if (m?.spec) throw new Error(`slot "${h}" is already declared ...`);
+           *   }
+           *
+           * and that check runs BEFORE the entry is booked, so the whole
+           * register() throws and the seat is never created — the plugin looks
+           * installed but nothing renders. A try/catch fallback does NOT help:
+           * the plugin is an `immediately: true` dynamic entry, so it may
+           * register first and the shipped entry then throws the same error
+           * instead; the seat still never renders. The only correct move is to
+           * never declare the child.
+           *
+           * Cost: no `renderSlot` binding, so the trigger falls back to the
+           * catalog model name and loses the 1017 badge decoration. Both call
+           * sites already guard for a missing binding, so behaviour is intact. */
           priority: -1,
           inject(sessionId) {
             const directory = ctx.modelDirectories.directoryFor(sessionId);
