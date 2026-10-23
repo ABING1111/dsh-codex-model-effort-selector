@@ -20,6 +20,17 @@ import assert from 'node:assert/strict';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const code = readFileSync(join(HERE, '..', 'client.js'), 'utf8');
 
+/**
+ * The source with every comment removed.
+ *
+ * The file documents its past incidents at length, and those comments quote
+ * the very calls some assertions forbid. Matching the raw text would pass on
+ * a comment and fail on a call — the opposite of what the assertion means.
+ */
+const src = code
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
 /* ---------------------------------------------------------------------------
  * React stub.
  *
@@ -78,7 +89,9 @@ check('bundle loads and exports a plugin', () => {
   );
   assert.ok(loaded.mod, 'factory ran');
   assert.equal(typeof loaded.mod.apply, 'function', 'apply()');
-  assert.deepEqual(loaded.mod.inject, ['slots', 'modelDirectories', 'sessions', 'locale']);
+  assert.deepEqual(loaded.mod.inject, [
+    'slots', 'modelDirectories', 'sessions', 'locale', 'remote', 'remote.session'
+  ]);
 });
 
 // --- capture what apply() registers ---------------------------------------
@@ -171,7 +184,6 @@ check('subagent sessions are reported unavailable', () => {
 
 // --- pure logic mirrored from the bundle ----------------------------------
 // (kept in sync by asserting against the shipped source text)
-const src = code;
 
 check('peak ids are max/ultra (not "last stop")', () => {
   assert.match(src, /const PEAK_IDS = \['max', 'ultra'\];/);
@@ -531,7 +543,7 @@ check('FIX: a long model name truncates instead of hiding the level', () => {
   assert.match(src, /\.\$\{P\}-caption\{flex:0 1 auto;/, 'the caption is the shrinking item');
   assert.match(src, /\.\$\{P\}-triggerEffort\{flex:none;/, 'the level never shrinks');
   // structurally: the level span is a SIBLING of the caption, not a child of it
-  assert.match(src, /: modelName\),\s*triggerLabel\s*\? h\('span', \{ className: `\$\{P\}-triggerEffort` \}, triggerLabel\)/,
+  assert.match(src, /className: `\$\{P\}-caption`\s*\}\s*,\s*modelName\)\s*,\s*triggerLabel\s*\? h\('span', \{ className: `\$\{P\}-triggerEffort` \}, triggerLabel\)/s,
     'the level is rendered outside the truncating box');
   // the old in-caption form (with its leading space) must be gone
   assert.doesNotMatch(src, /` \$\{triggerLabel\}`/, 'no level text inside the caption');
@@ -559,7 +571,7 @@ check('NEW: the Fast toggle is remembered per conversation', () => {
   assert.match(src, /if \(fastSessionRef\.current === sessionId\) return;/, 'session switch re-reads');
   // fail-open: a locked-down storage must never break the composer
   assert.match(src, /catch \{ return false; \}/, 'read degrades to off');
-  assert.match(src, /catch \{ \/\* storage disabled/, 'write swallows failures');
+  assert.match(code, /catch \{ \/\* storage disabled/, 'write swallows failures');
   assert.match(src, /if \(typeof localStorage === 'undefined'\) return false;/, 'guards for storage absence');
 });
 
@@ -628,9 +640,9 @@ check('FIX: a drag cannot be interrupted mid-gesture', () => {
   // because THOSE are what fire pointercancel and kill a drag
   assert.match(src, /event\.preventDefault\(\);/, 'press suppresses native drag defaults');
   // capture is best-effort only, never the mechanism
-  assert.match(src, /Pointer capture is a convenience, NOT the mechanism/, 'capture is documented as optional');
+  assert.match(code, /Pointer capture is a convenience, NOT the mechanism/, 'capture is documented as optional');
   // the rail's own move handler must not also apply the drag (no double work)
-  const pm = src.match(/function pointerMove\(event\) \{([\s\S]*?)\n      \}/);
+  const pm = code.match(/function pointerMove\(event\) \{([\s\S]*?)\n      \}/);
   assert.ok(pm, 'pointerMove found');
   assert.match(pm[1], /if \(dragRef\.current\) return;/, 'rail handler is hover-only while dragging');
 });
@@ -644,14 +656,24 @@ check('FIX: hovering a tick now actually highlights it', () => {
 
 /* ── DSH 0.2.1-rc.2 contract ────────────────────────────────────────────── */
 
-check('0.2.1: the seat declares its label child slot and renders it', () => {
-  assert.match(src, /children: \{\n\s*'conversation\.input\.model\.label': \{\n\s*kind: 'single', scope: 'session', inline: true/,
-    'the child slot is declared with the shipped spec');
-  assert.match(src, /renderSlot\('conversation\.input\.model\.label'/, 'and rendered');
-  assert.match(src, /placement: 'trigger'/, 'trigger placement');
-  assert.match(src, /placement: 'option'/, 'option placement');
-  // a 0.2.0 host hands out no renderSlot; the plain name must still render
-  assert.match(src, /: modelName\)/, 'plain-name fallback kept');
+check('0.2.1: the seat does NOT claim the label child slot (incident 20)', () => {
+  // `conversation.input.model.label` is a CHILD SLOT, and a child slot may be
+  // declared by exactly ONE entry — the registry throws for the second
+  // declarer. The shipped `@deepseek-ai/dsh-client-ui-model-selection` declares
+  // it. When this plugin declared it too, the SHIPPED registration threw and
+  // never reached the ledger, so switching the plugin off emptied the seat and
+  // the model selector vanished from the composer.
+  //
+  // So: no `children` table here, and no `renderSlot` call for that key.
+  assert.doesNotMatch(src, /children:\s*\{[^}]*'conversation\.input\.model\.label'/,
+    'we must not declare a child slot the shipped entry owns');
+  assert.doesNotMatch(src, /renderSlot\('conversation\.input\.model\.label'/,
+    'and we must not render a child slot we do not own');
+  // the plain catalog name is what the seat shows
+  assert.match(src, /className: `\$\{P\}-caption`\s*\}\s*,\s*modelName\)/s,
+    'the trigger renders the catalog model name');
+  assert.match(src, /className: `\$\{P\}-modelName`\s*\}\s*,\s*h\('span', null, m\.name \|\| m\.id\)/s,
+    'the model row renders the catalog model name');
 });
 
 // --- report ---------------------------------------------------------------

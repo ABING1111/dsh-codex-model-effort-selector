@@ -5,6 +5,41 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **关掉插件后，消息栏里的模型选择器整个消失（官方那颗也不回来）**。
+  插件开着时一切正常；一旦关闭，composer 里的模型选择器**什么都不剩**。
+  - 根因：**子槽位的声明是独占的**。`conversation.input.model.label` 这个子槽，
+    官方 `dsh-client-ui-model-selection` 也在声明；而注册表对**第二个**声明者直接抛
+    `slot "..." is already declared (by ...)`。本插件此前为了保住模型名上的
+    「1017」徽标（第 16 条）**也声明了它**，而本插件是 `immediately: true` 的动态包、
+    **先注册** —— 于是**官方的注册被打掉，从来没有进过 ledger**。
+    座位上因此一直只剩插件这一条；插件一关，座位就空了，官方那颗想回来也回不来。
+  - 修法：**插件不再声明这个子槽，也不再调用 `renderSlot` 渲染它**，直接渲染目录里的模型名。
+    子槽属于官方那条 entry；渲染器也只在条目**自己声明了 children** 时才装配 `renderSlot`，
+    并且只认自己声明过的子键 —— 不拥有的东西就不该碰。
+    这样官方那条能正常注册，座位上永远有两条，**关掉插件官方选择器立刻接管**。
+  - **代价**：官方那个「1017」徽标在本插件占用座位期间不再显示。
+    徽标是装饰，模型选择器是功能；而且徽标本来就只有官方那条 entry 在渲染时才会画出来 ——
+    想显示它就得抢声明，而抢声明就等于把官方那条打死。
+  - 回归防护写在新增的 `test/seat-lifecycle.mjs`：**从 asar 里把随包发布的真实
+    `SlotCore` 抽出来跑**（不是仿写），复刻整条生命周期 ——
+    官方注册必须成功、关掉插件后座位必须仍有 winner 且渲染官方那颗；
+    另有一条**对照组**用旧的（有缺陷的）形状跑一遍，证明那条失败路径确实会被捕获。
+- **打开弹层后整块消失 / 席位点开就崩（`cannot get property "remote.session" without inject`）**。
+  插件的 `inject` 只声明了 `slots / modelDirectories / sessions / locale`，但它调用的
+  `ctx.modelDirectories.directoryFor(sessionId)` 由官方 `ModelDirectoryResolver` 实现，
+  而 `directoryFor()` 内部读的是 `this.ctx.remote.session`。**Cordis 用「调用方 ctx」的 inject
+  列表校验这次访问**，不是用服务自己的 `static inject`，所以调用直接抛错。
+  抛出点在席位条目的 `inject(sessionId)` 里 —— 也就是**每次渲染 composer 席位都会抛一次**，
+  `slot entry crashed in 'conversation.input.model'`，于是按钮/样式都在、一交互整条席位就没了。
+  现在补齐 `remote` 与 `remote.session`，与官方 `ui-model-selection` 声明的服务列表一致。
+  - 回归防护写在 `test/slots-integration.mjs`：**从 asar 里读出官方插件的 inject 列表**，
+    断言本插件覆盖了 resolver 会访问的每一个服务（而不是硬编码一份字符串，官方换实现时测试先响）。
+  - 真实实例（`--remote-debugging-port=9222` + CDP）复测：修复前 `cmes` 元素 0 个；
+    修复后 82 个，触发按钮正常，弹层 `visibility:visible / opacity:1`，停留 3 秒仍在，
+    切模型列表高 255px 并正确列出 5 个 provider，再次点击正常关闭。
+
 ## [1.1.2] — 2026-10-17
 
 ### 修复
