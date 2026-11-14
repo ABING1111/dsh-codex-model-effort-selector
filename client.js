@@ -26,7 +26,8 @@ window.__ModuleLoader__.load({
   id: 'dsh-codex-model-effort-selector',
   factory(require) {
     const React = require('react');
-    const ReactDOM = require('react-dom');
+    let ReactDOM = null;
+    try { ReactDOM = require('react-dom'); } catch (_error) { ReactDOM = null; }
     const h = React.createElement;
     const createPortal = ReactDOM && typeof ReactDOM.createPortal === 'function'
       ? ReactDOM.createPortal.bind(ReactDOM)
