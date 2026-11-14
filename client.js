@@ -26,11 +26,58 @@ window.__ModuleLoader__.load({
   id: 'dsh-codex-model-effort-selector',
   factory(require) {
     const React = require('react');
+    const ReactDOM = require('react-dom');
     const h = React.createElement;
+    const createPortal = ReactDOM && typeof ReactDOM.createPortal === 'function'
+      ? ReactDOM.createPortal.bind(ReactDOM)
+      : null;
     const { useState, useEffect, useLayoutEffect, useRef, useSyncExternalStore, useMemo } = React;
 
     const NS = 'dsh-codex-model-effort-selector';
     const P = 'cmes';   // class prefix
+    const POPOVER_WIDTH = 272;
+
+    /**
+     * Place the popover against the trigger's right edge. The trigger sits at
+     * the right end of the composer, so centering a 272px card on a narrower
+     * trigger pushes the card past the trigger to the right (and into the
+     * viewport clamp). Right-aligning keeps the visual anchor stable for both
+     * wide and narrow model labels. The old center formula also depended on
+     * fixed positioning being viewport-relative; the portal below makes that
+     * true even when a host wrapper has a transform/filter.
+     */
+    function popoverPlacement(trigger, viewport, width) {
+      const viewWidth = viewport && Number.isFinite(viewport.width) ? viewport.width : 0;
+      const viewHeight = viewport && Number.isFinite(viewport.height) ? viewport.height : 0;
+      const boxWidth = Number.isFinite(width) ? width : POPOVER_WIDTH;
+      const effectiveWidth = Math.max(0, Math.min(boxWidth, viewWidth - 24));
+      const triggerLeft = Number(trigger && trigger.left) || 0;
+      const triggerTop = Number(trigger && trigger.top) || 0;
+      const triggerRight = Number(trigger && trigger.right);
+      const right = Number.isFinite(triggerRight) ? triggerRight : triggerLeft + (Number(trigger && trigger.width) || 0);
+      return {
+        left: Math.max(12, Math.min(right - effectiveWidth, viewWidth - effectiveWidth - 12)),
+        bottom: Math.max(12, viewHeight - triggerTop + 8)
+      };
+    }
+
+    /**
+     * Fixed overlays must be children of <body>, not of the composer: a host
+     * wrapper with transform/filter/backdrop-filter makes position:fixed
+     * relative to that wrapper, which is exactly how the popover ended up
+     * shifted to the right. The display:contents layer keeps codex's
+     * `.cmes-root` colour variables without creating a layout box or a new
+     * stacking context.
+     */
+    function OverlayLayer(props) {
+      const layer = h('div', {
+        className: `${P}-root`,
+        ref: props.layerRef,
+        style: { display: 'contents' }
+      }, props.children);
+      if (!createPortal || typeof document === 'undefined' || !document.body) return layer;
+      return createPortal(layer, document.body);
+    }
 
     /* ------------------------------------------------------------------ *
      * Copy
@@ -701,6 +748,7 @@ body[data-ds-dark-theme] .${P}-root{
       const [subProvider, setSubProvider] = useState(null);
 
       const rootRef = useRef(null);
+      const portalRootRef = useRef(null);
       const popupRef = useRef(null);
       const railRef = useRef(null);
       const triggerRef = useRef(null);
@@ -1017,7 +1065,9 @@ body[data-ds-dark-theme] .${P}-root{
         if (!open) return;
         let frame = 0;
         function outside(event) {
-          if (!rootRef.current?.contains(event.target)) close();
+          if (rootRef.current?.contains(event.target)) return;
+          if (popupRef.current?.contains(event.target)) return;
+          close();
         }
         function escape(event) {
           if (event.key !== 'Escape') return;
@@ -1032,13 +1082,21 @@ body[data-ds-dark-theme] .${P}-root{
         }
         function align() {
           const trigger = triggerRef.current?.getBoundingClientRect();
-          const popup = popupRef.current;
-          if (!trigger || !popup || !rootRef.current) return;
-          const width = Math.min(272, window.innerWidth - 24);
-          const left = Math.max(12, Math.min((trigger.left + trigger.right - width) / 2, window.innerWidth - width - 12));
-          const bottom = Math.max(12, window.innerHeight - trigger.top + 8);
-          rootRef.current.style.setProperty(`--${P}-left`, `${left}px`);
-          rootRef.current.style.setProperty(`--${P}-bottom`, `${bottom}px`);
+          if (!trigger || !rootRef.current) return;
+          const { left, bottom } = popoverPlacement(
+            trigger,
+            { width: window.innerWidth, height: window.innerHeight },
+            Math.min(POPOVER_WIDTH, window.innerWidth - 24)
+          );
+          /* The popover is portalled to body, so it cannot inherit the vars
+           * written on the composer root. Set them on the portal layer and on
+           * the popover itself (the latter is the fallback used by tests and
+           * by hosts where react-dom's createPortal is unavailable). */
+          for (const node of [rootRef.current, portalRootRef.current, popupRef.current]) {
+            if (!node) continue;
+            node.style.setProperty(`--${P}-left`, `${left}px`);
+            node.style.setProperty(`--${P}-bottom`, `${bottom}px`);
+          }
         }
         function resized() {
           cancelAnimationFrame(frame);
@@ -1588,7 +1646,9 @@ body[data-ds-dark-theme] .${P}-root{
             : null,
           icon('down', `${P}-chev`)),
 
-        h('section', {
+        h(OverlayLayer, { layerRef: portalRootRef },
+          h('section', {
+            key: 'popover',
           className: classes, ref: popupRef, role: 'dialog',
           'aria-label': pane === 'models' ? t('model') : t('effort'),
           'aria-hidden': !open, inert: !open ? '' : undefined,
@@ -1608,11 +1668,11 @@ body[data-ds-dark-theme] .${P}-root{
         /* THE FAST TOOLTIP — a sibling of the popover, NOT a descendant of it.
          * The popover's backdrop-filter makes it the containing block for fixed
          * descendants and its `overflow:hidden` then clips them, which is why
-         * hovering used to reveal nothing at all. `.cmes-root` has no
-         * transform/filter, so `position:fixed` here is viewport-relative and
-         * nothing clips it. It is portalled no further than this wrapper, which
-         * keeps it inside the plugin's own tree (no react-dom dependency). */
+         * hovering used to reveal nothing at all. Both overlays are portalled
+         * to <body> together, so a transformed/filtered composer wrapper cannot
+         * turn their viewport coordinates into local ones. */
         h('span', {
+          key: 'fast-tip',
           role: 'tooltip', id: 'cmes-fast-tip',
           className: `${P}-tip${tipShown ? ' show' : ''}`,
           ref: tipRef, 'aria-hidden': tipShown ? undefined : 'true'
@@ -1621,7 +1681,7 @@ body[data-ds-dark-theme] .${P}-root{
           h('span', null, t('usage')),
           /* the reference card is two lines; the honesty note stays discoverable
            * by assistive tech rather than being deleted outright */
-          h('span', { className: `${P}-sr` }, t('visual'))));
+          h('span', { className: `${P}-sr` }, t('visual')))));
     }
 
     /* ================================================================== *
