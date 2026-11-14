@@ -1649,21 +1649,21 @@ body[data-ds-dark-theme] .${P}-root{
         h(OverlayLayer, { layerRef: portalRootRef },
           h('section', {
             key: 'popover',
-          className: classes, ref: popupRef, role: 'dialog',
-          'aria-label': pane === 'models' ? t('model') : t('effort'),
-          'aria-hidden': !open, inert: !open ? '' : undefined,
-          style: {
-            [`--${P}-height`]: `${pane === 'models' ? cappedHeight : 104}px`,
-            /* the heading ink is stamped here so the effort pane's title picks
-             * up the current level's colour */
-            [`--${P}-ink`]: inkFor(displayed, dark)
-          }
-        },
-          modelsView,
-          effortView,
-          busy ? h('div', { className: `${P}-sr`, role: 'status' }, t('busy')) : null,
-          status ? h('div', { className: `${P}-status`, role: 'alert', style: { position: 'absolute', left: 12, right: 12, bottom: 6, color: 'var(--dsw-alias-state-error-primary)' } },
-            h('span', null, status)) : null),
+            className: classes, ref: popupRef, role: 'dialog',
+            'aria-label': pane === 'models' ? t('model') : t('effort'),
+            'aria-hidden': !open, inert: !open ? '' : undefined,
+            style: {
+              [`--${P}-height`]: `${pane === 'models' ? cappedHeight : 104}px`,
+              /* the heading ink is stamped here so the effort pane's title picks
+               * up the current level's colour */
+              [`--${P}-ink`]: inkFor(displayed, dark)
+            }
+          },
+            modelsView,
+            effortView,
+            busy ? h('div', { className: `${P}-sr`, role: 'status' }, t('busy')) : null,
+            status ? h('div', { className: `${P}-status`, role: 'alert', style: { position: 'absolute', left: 12, right: 12, bottom: 6, color: 'var(--dsw-alias-state-error-primary)' } },
+              h('span', null, status)) : null),
 
         /* THE FAST TOOLTIP — a sibling of the popover, NOT a descendant of it.
          * The popover's backdrop-filter makes it the containing block for fixed
