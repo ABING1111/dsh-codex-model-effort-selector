@@ -4,7 +4,7 @@
 > **Codex 桌面版风格「模型 + 推理强度」选择器**：
 > 把输入框上那枚紧凑的模型席按钮，换成 Codex 风格的弹层 —— 一个入口，两块面板。
 
-![version](https://img.shields.io/badge/version-1.1.2-blue?style=flat-square)
+![version](https://img.shields.io/badge/version-1.1.3-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![tests](https://img.shields.io/badge/tests-120%20passing-brightgreen?style=flat-square)
 ![dsh](https://img.shields.io/badge/DSH-0.2.1--rc.2-5b6ef5?style=flat-square)
