@@ -244,6 +244,9 @@ node --check client.js
 # 离线断言套件（47 项：加载 / 注册契约 / 遮蔽 / 几何 / 配色 / 主题接线 / fail-open / 无障碍 / 两级下钻 / 悬浮窗 / 绽放 / 形变 / 抓手 / 0.2.1 子槽位归属）
 node test/verify.mjs
 
+# 弹层定位/portal 回归（23 项：右对齐、gutter、窄视口、短视口、OverlayLayer、Tab 焦点契约）
+node test/placement.mjs
+
 # 配色断言（24 项：浅色 + 深色各过一遍三条 WCAG 下限 + 色相单调 + 色度 + 去重）
 node test/palette.mjs
 
@@ -257,7 +260,7 @@ node test/seat-lifecycle.mjs
 # 对着真实 DSH 的集成测试（9 项；0.2.1 对着随包源码断言子槽位契约，找不到 DSH 安装时自动跳过）
 node test/slots-integration.mjs
 
-# 编码守卫（26 项：所有文本文件必须是无 BOM 的干净 UTF-8）
+# 编码守卫（27 项：所有文本文件必须是无 BOM 的干净 UTF-8）
 node test/encoding.mjs
 
 # 重新生成 README 截图（从 client.js 抽取真实 CSS；需要 Edge/Chrome）

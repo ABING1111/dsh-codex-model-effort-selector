@@ -37,6 +37,7 @@ window.__ModuleLoader__.load({
     const NS = 'dsh-codex-model-effort-selector';
     const P = 'cmes';   // class prefix
     const POPOVER_WIDTH = 272;
+    const POPOVER_MIN_HEIGHT = 104;
 
     /**
      * Place the popover against the trigger's right edge. The trigger sits at
@@ -58,7 +59,10 @@ window.__ModuleLoader__.load({
       const right = Number.isFinite(triggerRight) ? triggerRight : triggerLeft + (Number(trigger && trigger.width) || 0);
       return {
         left: Math.max(12, Math.min(right - effectiveWidth, viewWidth - effectiveWidth - 12)),
-        bottom: Math.max(12, viewHeight - triggerTop + 8)
+        /* Keep the effort card's 104px minimum above the viewport floor even
+         * when the trigger is near the top. Without this the CSS max-height
+         * clips the rail; overlapping the trigger is preferable to hiding it. */
+        bottom: Math.max(12, Math.min(viewHeight - triggerTop + 8, viewHeight - POPOVER_MIN_HEIGHT - 12))
       };
     }
 
@@ -365,7 +369,7 @@ window.__ModuleLoader__.load({
 .${P}-tip .${P}-tipTitle{color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:18px}
 
 /* ---------- popover ---------- */
-.${P}-popover{position:fixed;bottom:var(--${P}-bottom,40px);left:var(--${P}-left,12px);width:272px;max-width:calc(100vw - 24px);height:var(--${P}-height,104px);max-height:calc(100vh - var(--${P}-bottom,40px) - 12px);padding:0;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));border-radius:14px;box-shadow:var(--dsw-elevation-panel);backdrop-filter:var(--dsw-menu-backdrop-filter);z-index:1100;overflow:hidden;transform-origin:bottom left;transition:opacity .18s ease,transform .18s ease,height .2s cubic-bezier(.2,.8,.2,1),visibility 0s}
+.${P}-popover{position:fixed;bottom:var(--${P}-bottom,40px);left:var(--${P}-left,12px);width:272px;max-width:calc(100vw - 24px);height:var(--${P}-height,104px);max-height:calc(100vh - var(--${P}-bottom,40px) - 12px);padding:0;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));border-radius:14px;box-shadow:var(--dsw-elevation-panel);backdrop-filter:var(--dsw-menu-backdrop-filter);z-index:1100;overflow:hidden;transform-origin:bottom right;transition:opacity .18s ease,transform .18s ease,height .2s cubic-bezier(.2,.8,.2,1),visibility 0s}
 .${P}-popover.closed{opacity:0;pointer-events:none;visibility:hidden;transform:translateY(5px) scale(.98);transition-delay:0s,0s,0s,.18s}
 .${P}-popover.peak{--dsw-elevation-stroke-color:rgba(145,78,246,.28)}
 
@@ -1066,8 +1070,11 @@ body[data-ds-dark-theme] .${P}-root{
       useLayoutEffect(() => {
         if (!open) return;
         let frame = 0;
+        let watchFrame = 0;
+        let lastRect = '';
         function outside(event) {
           if (rootRef.current?.contains(event.target)) return;
+          if (portalRootRef.current?.contains(event.target)) return;
           if (popupRef.current?.contains(event.target)) return;
           close();
         }
@@ -1108,24 +1115,71 @@ body[data-ds-dark-theme] .${P}-root{
           const settle = () => { align(); if (performance.now() < until) frame = requestAnimationFrame(settle); };
           frame = requestAnimationFrame(settle);
         }
+        /* Window resize/scroll do not cover the host moving the trigger without
+         * resizing it (sidebar toggle, composer growth, layout transition). The
+         * popover is body-fixed now, so it would otherwise stay at stale
+         * coordinates. One rect read per frame while open is cheap and catches
+         * every layout path, including the 500ms host open animation. */
+        function watchAnchor() {
+          const rect = triggerRef.current?.getBoundingClientRect();
+          if (rect) {
+            const key = `${rect.left}|${rect.top}|${rect.width}|${rect.height}`;
+            if (key !== lastRect) { lastRect = key; align(); }
+          }
+          watchFrame = requestAnimationFrame(watchAnchor);
+        }
+        function scrolled(event) {
+          /* Scrolling the model list must not re-anchor the panel. */
+          if (popupRef.current?.contains(event.target)) return;
+          align();
+        }
         document.addEventListener('pointerdown', outside);
         document.addEventListener('keydown', escape, true);
         window.addEventListener('resize', resized);
-        document.addEventListener('scroll', align, true);
+        document.addEventListener('scroll', scrolled, true);
+        window.visualViewport?.addEventListener('resize', align);
+        window.visualViewport?.addEventListener('scroll', align);
         align();
+        if (typeof requestAnimationFrame === 'function') watchFrame = requestAnimationFrame(watchAnchor);
         return () => {
           document.removeEventListener('pointerdown', outside);
           document.removeEventListener('keydown', escape, true);
           window.removeEventListener('resize', resized);
-          document.removeEventListener('scroll', align, true);
+          document.removeEventListener('scroll', scrolled, true);
+          window.visualViewport?.removeEventListener('resize', align);
+          window.visualViewport?.removeEventListener('scroll', align);
           cancelAnimationFrame(frame);
+          cancelAnimationFrame(watchFrame);
         };
       }, [open]);
 
-      /* focus the search box when the model pane opens */
+      /* The popover is portalled to body, so the browser's normal Tab order
+       * would jump past it. Focus the panel (effort) or the search box (models)
+       * on open, and keep Tab inside the dialog while it is open. */
       useLayoutEffect(() => {
-        if (open && pane === 'models' && searchRef.current) searchRef.current.focus({ preventScroll: true });
+        if (!open) return;
+        if (pane === 'models' && searchRef.current) searchRef.current.focus({ preventScroll: true });
+        else if (pane === 'effort') popupRef.current?.focus({ preventScroll: true });
       }, [open, pane]);
+
+      function popoverKeyDown(event) {
+        if (event.key !== 'Tab') return;
+        const panel = popupRef.current;
+        if (!panel) return;
+        const focusables = Array.from(panel.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter(node => node.getClientRects().length > 0);
+        if (focusables.length === 0) { event.preventDefault(); return; }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
 
       /* ---------- rail pointer math (shared by knob / fill / dots) ---------- */
       /* The knob centre travels over [15, width-15], so a pointer maps to a
@@ -1616,6 +1670,7 @@ body[data-ds-dark-theme] .${P}-root{
           ref: triggerRef, disabled,
           'aria-label': `${modelName} ${triggerLabel}`.trim(),
           'aria-expanded': open, 'aria-haspopup': 'dialog', 'aria-busy': busy,
+          'aria-controls': `${P}-popover`,
           /* the collapsed seat also shows the level colour (issue 3) */
           style: { [`--${P}-ink`]: inkFor(savedEffort, dark) },
           onClick: () => {
@@ -1653,9 +1708,11 @@ body[data-ds-dark-theme] .${P}-root{
         h(OverlayLayer, { layerRef: portalRootRef },
           h('section', {
             key: 'popover',
+            id: `${P}-popover`, tabIndex: -1,
             className: classes, ref: popupRef, role: 'dialog',
             'aria-label': pane === 'models' ? t('model') : t('effort'),
             'aria-hidden': !open, inert: !open ? '' : undefined,
+            onKeyDown: popoverKeyDown,
             style: {
               [`--${P}-height`]: `${pane === 'models' ? cappedHeight : 104}px`,
               /* the heading ink is stamped here so the effort pane's title picks

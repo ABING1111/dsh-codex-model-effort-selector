@@ -1,6 +1,6 @@
 # 架构说明 · dsh-codex-model-effort-selector
 
-插件的运行时结构：两半的生命周期、席位接管、弹层状态机、几何与色彩的推导、粒子与交互细节、测试台分工。像素测量与逐帧对照见 [SPEC.md](./SPEC.md)；每个已修缺陷的因果链见 [INCIDENTS.md](./INCIDENTS.md)。所有事实均可在 `client.js`（1514 行）、`test/*.mjs` 与 `README.md` 中核对。
+插件的运行时结构：两半的生命周期、席位接管、弹层状态机、几何与色彩的推导、粒子与交互细节、测试台分工。像素测量与逐帧对照见 [SPEC.md](./SPEC.md)；每个已修缺陷的因果链见 [INCIDENTS.md](./INCIDENTS.md)。所有事实均可在 `client.js`（1817 行）、`test/*.mjs` 与 `README.md` 中核对。
 
 ---
 
@@ -261,7 +261,7 @@ CSS 侧第二道保险：`max-height:calc(100vh - var(--cmes-bottom,40px) - 12px
 
 ### 定位
 
-`align()` 在打开、`resize`、`scroll`（捕获阶段）时运行，把 `--cmes-left` / `--cmes-bottom` 写进 **root 与 portal 层**（`createPortal` 不可用时 portal 层仍在 root 内，root 的变量同样生效）。弹层与 Fast 浮层通过 `OverlayLayer` 挂到 `document.body` 的 `display:contents` 容器里 —— 宿主给 composer 加 transform/filter/backdrop-filter 或会建立包含块的 containment 时，`position:fixed` 仍相对视口，不会把视口坐标解释成局部的右偏。水平方向把 272px 卡片**右缘对齐触发器右缘**再夹进视口（`width = Math.min(272, innerWidth - 24)`，`left` 夹在 `[12, innerWidth - width - 12]`），垂直方向取 `bottom = Math.max(12, innerHeight - trigger.top + 8)`。`resize` 额外用 `requestAnimationFrame` 在 500ms 窗口内持续重算，跟随宿主的展开动画。外部点击必须同时检查 root 与 portal 后的弹层，否则在弹层内点击会先被当成「外部」关闭。
+`align()` 在打开、`resize`、`scroll`（捕获阶段）、`visualViewport` 变化时运行，并在打开期间每帧对比一次触发器矩形（侧栏/输入框高度/宿主布局动画都能捕获），把 `--cmes-left` / `--cmes-bottom` 写进 **root 与 portal 层**（`createPortal` 不可用时 portal 层仍在 root 内，root 的变量同样生效）。弹层与 Fast 浮层通过 `OverlayLayer` 挂到 `document.body` 的 `display:contents` 容器里 —— 宿主给 composer 加 transform/filter/backdrop-filter、`will-change:transform` 或 `container-type` 等包含块属性时，`position:fixed` 仍相对视口，不会把视口坐标解释成局部的右偏。水平方向把 272px 卡片**右缘对齐触发器右缘**再夹进视口（`width = Math.min(272, innerWidth - 24)`，`left` 夹在 `[12, innerWidth - width - 12]`；与官方菜单 `useAnchoredPosition({ side: 'top', align: 'end', gap: 8, margin: 12 })` 一致），垂直方向取 `bottom = Math.max(12, min(innerHeight - trigger.top + 8, innerHeight - 104 - 12))`，短视口下宁可压住触发器也不裁掉 104px 的推理条。`resize` 额外用 `requestAnimationFrame` 在 500ms 窗口内持续重算，跟随宿主的展开动画。外部点击必须同时检查 root、portal 层与弹层，否则在弹层内点击会先被当成「外部」关闭。弹层有 `tabIndex=-1`、外部触发器的 `aria-controls` 和 Tab 循环，portal 后键盘不会跳过它。
 
 ---
 
@@ -589,10 +589,11 @@ finally { busyRef.current = false; /* ... */ }
 
 | 文件 | 项数 | 测什么 |
 |---|---|---|
-| `test/verify.mjs` | 35 | 加载、注册契约、遮蔽、几何常量、配色存在性、主题接线、fail-open、无障碍、两级下钻 |
+| `test/verify.mjs` | 47 | 加载、注册契约、遮蔽、几何常量、配色存在性、主题接线、fail-open、无障碍、两级下钻 |
+| `test/placement.mjs` | 23 | 右对齐、左右 gutter、窄/短视口、`trigger.right` 回退、`OverlayLayer` portal/回退、外部点击与 Tab 焦点契约 |
 | `test/palette.mjs` | 24 | 浅色/深色两套色板各过一遍三条 WCAG 下限、色相单调、色度、去重、混色助手、主题信号 |
 | `test/collapse-regression.mjs` | 6 | **同时实现有 bug 与修好后的两个状态机**，并断言源码里反转读法已消失 |
-| `test/slots-integration.mjs` | 4 | 对着**真实 SlotCore** 的遮蔽与卸载恢复 |
+| `test/slots-integration.mjs` | 9 | 对着**真实 SlotCore** 的遮蔽与卸载恢复 |
 | `test/encoding.mjs` | 逐文件 | 干净 UTF-8、无 BOM、无 GBK 乱码；README 标题未被截断 |
 
 **verify.mjs 会真正执行 bundle。** 它把 `client.js` 塞进桩化的 `window.__ModuleLoader__`，用最小 React 桩把 bundle **跑起来**，捕获 `apply()` 注册的东西再断言注册形状。React 渲染路径被桩掉（离线没有真 React），几何与配色因此分别由源码断言和 HTML 预览验证。大量断言是**读源码文本**而不是跑逻辑（例如 `assert.match(src, /const PEAK_IDS = \['max', 'ultra'\];/)`）—— 常量一旦被改动，文本断言立刻失败，比「跑一遍但没走到那条分支」可靠。
