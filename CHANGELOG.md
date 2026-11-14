@@ -7,12 +7,14 @@
 
 ### 修复
 
-- **弹层向右偏 / 歪到右边（宿主给 composer 加了 transform 或 filter）**。
-  弹层原来留在 `.cmes-root` 里，靠「祖先没有 transform/filter」让 `position:fixed` 相对视口；
-  新版宿主在 composer 外层加了包含块后，`align()` 算出的视口 `left` 被当成相对局部的坐标，
-  卡片整体向右漂。现在把弹层和 Fast 浮层一起 portal 到 `document.body` 的
+- **弹层向右偏 / 歪到右边（宿主给 composer 加了包含块）**。
+  弹层原来留在 `.cmes-root` 里，靠「祖先没有 transform/filter/backdrop-filter」让
+  `position:fixed` 相对视口；新版宿主只要在 composer 外层加了 transform/filter/
+  backdrop-filter 或会建立包含块的 containment，`align()` 算出的视口 `left` 就会被当成
+  相对局部的坐标，卡片整体向右漂。
+  现在把弹层和 Fast 浮层一起 portal 到 `document.body` 的
   `display:contents` 层（保留 `.cmes-root` 的颜色变量，不产生布局盒），
-  `--cmes-left/--cmes-bottom` 同时写到 portal 层和弹层自身；外部点击同时检查 root 与弹层。
+  `--cmes-left/--cmes-bottom` 同时写到 root 与 portal 层；外部点击同时检查 root 与弹层。
   水平方向改为**卡片右缘对齐触发器右缘**，再按视口 12px 边距夹紧，避免窄触发器把卡片推到右边。
   回归：`test/placement.mjs` 覆盖右对齐、左右夹紧、窄视口和无 `right` 的触发器。
 

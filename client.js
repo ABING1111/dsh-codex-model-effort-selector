@@ -64,9 +64,10 @@ window.__ModuleLoader__.load({
 
     /**
      * Fixed overlays must be children of <body>, not of the composer: a host
-     * wrapper with transform/filter/backdrop-filter makes position:fixed
-     * relative to that wrapper, which is exactly how the popover ended up
-     * shifted to the right. The display:contents layer keeps codex's
+     * wrapper with transform/filter/backdrop-filter (or another containment
+     * that creates a containing block) makes position:fixed relative to that
+     * wrapper. The popover then applies viewport coordinates to the composer
+     * box and drifts to the right. The display:contents layer keeps codex's
      * `.cmes-root` colour variables without creating a layout box or a new
      * stacking context.
      */
@@ -1090,10 +1091,12 @@ body[data-ds-dark-theme] .${P}-root{
             Math.min(POPOVER_WIDTH, window.innerWidth - 24)
           );
           /* The popover is portalled to body, so it cannot inherit the vars
-           * written on the composer root. Set them on the portal layer and on
-           * the popover itself (the latter is the fallback used by tests and
-           * by hosts where react-dom's createPortal is unavailable). */
-          for (const node of [rootRef.current, portalRootRef.current, popupRef.current]) {
+           * written on the composer root. Set them on the portal layer; in the
+           * createPortal fallback the layer stays inside root and root's vars
+           * still apply. Avoid writing onto the popover itself: its style prop
+           * is React-managed and we do not want a manual custom property to
+           * race React's style diff. */
+          for (const node of [rootRef.current, portalRootRef.current]) {
             if (!node) continue;
             node.style.setProperty(`--${P}-left`, `${left}px`);
             node.style.setProperty(`--${P}-bottom`, `${bottom}px`);

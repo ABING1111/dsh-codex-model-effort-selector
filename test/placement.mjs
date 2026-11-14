@@ -1,10 +1,10 @@
 /**
  * Regression test for the popover anchor.
  *
- * The bug: the seat lives in the composer, and newer hosts wrap the composer
- * in a transformed/filtered box. `position:fixed` then becomes relative to
- * that wrapper, so a viewport `left` is interpreted as a local offset and the
- * popover drifts to the right. The fix has two independent parts:
+ * The bug: the seat lives in the composer, and a host wrapper can become the
+ * containing block for position:fixed (transform/filter/backdrop-filter or
+ * containment). The viewport `left` is then interpreted as a local offset and
+ * the popover drifts to the right. The fix has two independent parts:
  *   - portal the popover (and Fast tooltip) to <body>
  *   - right-align the 272px card to the trigger instead of centering it
  *
