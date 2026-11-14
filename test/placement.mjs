@@ -3,7 +3,7 @@
  *
  * The bug: the seat lives in the composer, and a host wrapper can become the
  * containing block for position:fixed (transform/filter/backdrop-filter,
- * will-change:transform, or container-type). The viewport `left` is then
+ * will-change:transform, or containment). The viewport `left` is then
  * interpreted as a local offset and the popover drifts to the right. The fix
  * has two independent parts:
  *   - portal the popover (and Fast tooltip) to <body>

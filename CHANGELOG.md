@@ -10,7 +10,7 @@
 - **弹层向右偏 / 歪到右边（宿主给 composer 加了包含块）**。
   弹层原来留在 `.cmes-root` 里，靠「祖先没有 transform/filter/backdrop-filter」让
   `position:fixed` 相对视口；新版宿主只要在 composer 外层加了 transform/filter/
-  backdrop-filter、`will-change:transform` 或 `container-type` 等会建立包含块的属性，
+  backdrop-filter、`will-change:transform` 或会建立包含块的 containment，
   `align()` 算出的视口 `left` 就会被当成相对局部的坐标，卡片整体向右漂。
   现在把弹层和 Fast 浮层一起 portal 到 `document.body` 的
   `display:contents` 层（保留 `.cmes-root` 的颜色变量，不产生布局盒），
