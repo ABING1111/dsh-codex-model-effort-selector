@@ -432,10 +432,12 @@ window.__ModuleLoader__.load({
 .${P}-dot.passed{background:var(--${P}-dotPassed,rgba(255,255,255,.55))}
 .${P}-dot.hovered{transform:scale(1.75)}
 .${P}-popover.peak .${P}-dot{opacity:0}
+.${P}-popover.fast-mode .${P}-dot{opacity:0}
 .${P}-sparks{opacity:0;transition:width .18s cubic-bezier(.2,.8,.2,1),opacity .25s ease}
 .${P}-popover.peak .${P}-sparks,.${P}-popover.fast-mode .${P}-sparks{opacity:1}
+.${P}-popover.peak .${P}-sp,.${P}-popover.fast-mode .${P}-sp{animation-play-state:running}
 .${P}-sp{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;opacity:var(--b,1);transform:scale(var(--b,1));animation:${P}-drift var(--dur,3s) linear infinite;animation-delay:var(--delay,0s)}
-@keyframes ${P}-drift{0%{left:-4%;opacity:0}6%{opacity:var(--b,1)}94%{opacity:var(--b,1)}100%{left:104%;opacity:0}}
+@keyframes ${P}-drift{0%{left:104%;opacity:0}6%{opacity:var(--b,1)}94%{opacity:var(--b,1)}100%{left:-4%;opacity:0}}
 
 /* ---------- arrival bloom ----------
    Reaching the far-right stop fires a ONE-SHOT burst of motes out of the knob,

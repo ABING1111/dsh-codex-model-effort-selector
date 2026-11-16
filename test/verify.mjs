@@ -575,6 +575,19 @@ check('NEW: the Fast toggle is remembered per conversation', () => {
   assert.match(src, /if \(typeof localStorage === 'undefined'\) return false;/, 'guards for storage absence');
 });
 
+/* ── rail sparkles ─────────────────────────────────────────────────────── */
+
+check('NEW: Ultra sparkles flow right-to-left and fast hides the level dots', () => {
+  assert.match(src, /@keyframes \$\{P\}-drift\{0%\{left:104%;opacity:0\}/,
+    'sparkles start at the right edge');
+  assert.match(src, /100%\{left:-4%;opacity:0\}\}/,
+    'and travel leftwards');
+  assert.match(src, /\.\$\{P\}-popover\.peak \.\$\{P\}-sp,\.\$\{P\}-popover\.fast-mode \.\$\{P\}-sp\{animation-play-state:running\}/,
+    'Ultra runs the sparkle animation without Fast');
+  assert.match(src, /\.\$\{P\}-popover\.fast-mode \.\$\{P\}-dot\{opacity:0\}/,
+    'Fast mode hides the level dots outside Ultra');
+});
+
 /* ── the far-right arrival bloom ────────────────────────────────────────── */
 
 check('NEW: arriving at the far-right stop blooms particles', () => {
