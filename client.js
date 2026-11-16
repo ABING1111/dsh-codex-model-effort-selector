@@ -435,8 +435,9 @@ window.__ModuleLoader__.load({
 .${P}-popover.fast-mode .${P}-dot{opacity:0}
 .${P}-sparks{opacity:0;transition:width .18s cubic-bezier(.2,.8,.2,1),opacity .25s ease}
 .${P}-popover.peak .${P}-sparks,.${P}-popover.fast-mode .${P}-sparks{opacity:1}
-.${P}-popover.peak .${P}-sp,.${P}-popover.fast-mode .${P}-sp{animation-play-state:running}
-.${P}-sp{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;opacity:var(--b,1);transform:scale(var(--b,1));animation:${P}-drift var(--dur,3s) linear infinite;animation-delay:var(--delay,0s)}
+.${P}-sp{position:absolute;left:var(--x,4%);width:3px;height:3px;border-radius:50%;background:#fff;opacity:var(--b,1);transform:scale(var(--b,1));animation:${P}-float var(--dur,3s) ease-in-out infinite;animation-delay:var(--delay,0s)}
+.${P}-popover.fast-mode .${P}-sp{animation-name:${P}-drift;animation-play-state:running;animation-timing-function:linear}
+@keyframes ${P}-float{0%,100%{transform:translateY(0) scale(var(--b,1));opacity:var(--b,1)}50%{transform:translateY(-3px) scale(var(--b,1));opacity:calc(var(--b,1)*.72)}}
 @keyframes ${P}-drift{0%{left:104%;opacity:0}6%{opacity:var(--b,1)}94%{opacity:var(--b,1)}100%{left:-4%;opacity:0}}
 
 /* ---------- arrival bloom ----------
@@ -615,6 +616,7 @@ body[data-ds-dark-theme] .${P}-root{
         const b = 0.5 + 0.5 * hash01(i * 7 + 3);
         out.push({
           key: i,
+          x: (4 + 92 * hash01(i * 17 + 9)).toFixed(1) + '%',
           top: (8 + 84 * hash01(i * 13 + 5)).toFixed(1) + '%',
           b: b.toFixed(2),
           dur: (1.6 + 2.4 * hash01(i * 3 + 11)).toFixed(2) + 's',
@@ -1645,7 +1647,7 @@ body[data-ds-dark-theme] .${P}-root{
               },
                 ...sparkles.map(s => h('i', {
                   key: s.key, className: `${P}-sp`,
-                  style: { top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
+                  style: { left: s.x, top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
                 }))),
               /* the arrival bloom: keyed on the arrival counter, so mounting a
                * new key restarts every mote's animation from 0% */

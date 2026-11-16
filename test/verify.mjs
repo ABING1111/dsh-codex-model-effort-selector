@@ -577,17 +577,23 @@ check('NEW: the Fast toggle is remembered per conversation', () => {
 
 /* ── rail sparkles ─────────────────────────────────────────────────────── */
 
-check('NEW: Ultra sparkles flow right-to-left and fast hides the level dots', () => {
+check('NEW: Ultra sparkles float, Fast runs right-to-left, and Fast hides the level dots', () => {
   assert.match(src, /@keyframes \$\{P\}-drift\{0%\{left:104%;opacity:0\}/,
-    'sparkles start at the right edge');
+    'the running sparkles start at the right edge');
   assert.match(src, /100%\{left:-4%;opacity:0\}\}/,
     'and travel leftwards');
-  assert.match(src, /\.\$\{P\}-popover\.peak \.\$\{P\}-sp,\.\$\{P\}-popover\.fast-mode \.\$\{P\}-sp\{animation-play-state:running\}/,
-    'Ultra runs the sparkle animation without Fast');
+  assert.match(src, /@keyframes \$\{P\}-float/, 'Ultra has a float-only animation');
+  assert.match(src, /x: \(4 \+ 92 \* hash01\(i \* 17 \+ 9\)\)/, 'floating particles are spread horizontally');
+  assert.match(src, /left: s\.x/, 'the spread is applied inline');
+  assert.match(src, /\.\$\{P\}-sp\{[^}]*animation:\$\{P\}-float/, 'sparkles default to floating');
+  assert.match(src, /\.\$\{P\}-popover\.fast-mode \.\$\{P\}-sp\{[^}]*animation-name:\$\{P\}-drift;[^}]*animation-play-state:running/,
+    'only Fast switches the sparkles to running');
+  assert.doesNotMatch(src, /\.\$\{P\}-popover\.peak \.\$\{P\}-sp\{animation-play-state:running\}/,
+    'Ultra alone never starts the running animation');
   assert.match(src, /\.\$\{P\}-popover\.fast-mode \.\$\{P\}-dot\{opacity:0\}/,
     'Fast mode hides the level dots outside Ultra');
   assert.match(src, /key: peak \? 'sparks-peak' : 'sparks-normal'/,
-    'entering Ultra remounts the sparkle layer so the flow visibly restarts');
+    'entering Ultra remounts the float layer');
 });
 
 /* ── the far-right arrival bloom ────────────────────────────────────────── */
