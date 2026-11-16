@@ -8,10 +8,12 @@
 ### 修复
 
 - **Ultra 星尘应只漂浮、Fast 才 running；方向反了；Fast 非 Ultra 时挡位点没消失**。
-  `.cmes-sp` 默认走 `float`（上下轻浮，水平位置来自 `--x`），只有 `.fast-mode`
-  才切到 `drift` 并 `animation-play-state: running`。drift 关键帧从右往左
-  （104% → -4%）。Fast 模式同时隐藏 `.cmes-dot`，非 Ultra 也不显示挡位点。
-  回归：`test/verify.mjs` 的 rail sparkle 检查。
+  `.cmes-sp` 拆成 float / run 两层：Ultra 只走 `float`（上下轻浮，水平位置来自
+  `--x`）；切到 Fast 时 float 层用 `exit` 从原位置一起向左滑走，run 层从右边
+  104% 生成后向左 drift。Fast 模式同时隐藏 `.cmes-dot`，非 Ultra 也不显示挡位点。
+- **松开滑条时旋钮瞬移**。`.dragging` 会临时关掉 knob 的 `left` transition；
+  release 现在先移除该类，再在下一帧写回吸附位置，旋钮会滑到档位而不是瞬移。
+  回归：`test/verify.mjs` 的 rail sparkle / settle 检查。
 
 - **弹层向右偏 / 歪到右边（宿主给 composer 加了包含块）**。
   弹层原来留在 `.cmes-root` 里，靠「祖先没有 transform/filter/backdrop-filter」让

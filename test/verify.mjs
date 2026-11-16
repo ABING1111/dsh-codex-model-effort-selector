@@ -417,7 +417,7 @@ check('ISSUE 3: the knob always settles on a stop on release', () => {
   // release path snaps BEFORE committing
   const fin = src.match(/function finish\(event\) \{([\s\S]*?)\n      \}/);
   assert.ok(fin, 'finish found');
-  assert.match(fin[1], /snapLive\(i\)/, 'finish snaps the knob');
+  assert.match(fin[1], /settleLive\(i\)/, 'finish defers the snap so the knob slides');
   /* A release with NO coordinates (the window-level safety net, a synthesised
    * pointerup, a lost capture) must resolve to the CURRENT stop. The old
    * `nearestIndex(event ? event.clientX : NaN)` wrote `--pos: NaN`, which makes
@@ -430,7 +430,7 @@ check('ISSUE 3: the knob always settles on a stop on release', () => {
   // cancel rolls back onto the committed stop, not the raw position
   const cancel = src.match(/function cancelDrag\(\) \{([\s\S]*?)\n      \}/);
   assert.ok(cancel, 'cancelDrag found');
-  assert.match(cancel[1], /snapLive\(index\)/, 'cancel rolls back to a stop');
+  assert.match(cancel[1], /settleLive\(index\)/, 'cancel rolls back to a stop');
   // keyboard moves snap too
   const key = src.match(/function keyDown\(event\) \{([\s\S]*?)\n      \}/);
   assert.ok(key, 'keyDown found');
@@ -579,21 +579,33 @@ check('NEW: the Fast toggle is remembered per conversation', () => {
 
 check('NEW: Ultra sparkles float, Fast runs right-to-left, and Fast hides the level dots', () => {
   assert.match(src, /@keyframes \$\{P\}-drift\{0%\{left:104%;opacity:0\}/,
-    'the running sparkles start at the right edge');
+    'new running sparkles spawn at the right edge');
   assert.match(src, /100%\{left:-4%;opacity:0\}\}/,
     'and travel leftwards');
+  assert.match(src, /@keyframes \$\{P\}-exit\{0%\{left:var\(--x,4%\);opacity:var\(--b,1\)\}/,
+    'the floating dust exits from its current position');
   assert.match(src, /@keyframes \$\{P\}-float/, 'Ultra has a float-only animation');
   assert.match(src, /x: \(4 \+ 92 \* hash01\(i \* 17 \+ 9\)\)/, 'floating particles are spread horizontally');
   assert.match(src, /left: s\.x/, 'the spread is applied inline');
-  assert.match(src, /\.\$\{P\}-sp\{[^}]*animation:\$\{P\}-float/, 'sparkles default to floating');
-  assert.match(src, /\.\$\{P\}-popover\.fast-mode \.\$\{P\}-sp\{[^}]*animation-name:\$\{P\}-drift;[^}]*animation-play-state:running/,
-    'only Fast switches the sparkles to running');
-  assert.doesNotMatch(src, /\.\$\{P\}-popover\.peak \.\$\{P\}-sp\{animation-play-state:running\}/,
-    'Ultra alone never starts the running animation');
+  assert.match(src, /\.\$\{P\}-sp-float\{animation:\$\{P\}-float/, 'the float layer uses float');
+  assert.match(src, /\.\$\{P\}-sp-run\{left:104%;opacity:0;animation:\$\{P\}-drift/,
+    'the run layer starts off-screen right');
+  assert.match(src, /\.\$\{P\}-popover\.peak\.fast-mode \.\$\{P\}-sp-float\{animation:\$\{P\}-exit/,
+    'turning Fast on at Ultra slides the existing dust left');
   assert.match(src, /\.\$\{P\}-popover\.fast-mode \.\$\{P\}-dot\{opacity:0\}/,
     'Fast mode hides the level dots outside Ultra');
-  assert.match(src, /key: peak \? 'sparks-peak' : 'sparks-normal'/,
-    'entering Ultra remounts the float layer');
+  assert.match(src, /key: peak \? 'sparks-float-peak' : 'sparks-float-idle'/, 'the float layer is keyed');
+  assert.match(src, /key: fast \? 'sparks-run-on' : 'sparks-run-off'/, 'the run layer restarts from the right');
+});
+
+/* ── rail settling ─────────────────────────────────────────────────────── */
+
+check('NEW: releasing a drag slides the knob instead of teleporting', () => {
+  assert.match(src, /function settleLive\(i\)[\s\S]{0,500}classList\.remove\('dragging'\)/,
+    'the dragging class is removed before the snap');
+  assert.match(src, /function settleLive\(i\)[\s\S]{0,800}requestAnimationFrame\(write\)/,
+    'the snap waits one frame so the CSS transition is active');
+  assert.match(src, /settleLive\(i\);/, 'the release path uses the deferred snap');
 });
 
 /* ── the far-right arrival bloom ────────────────────────────────────────── */
