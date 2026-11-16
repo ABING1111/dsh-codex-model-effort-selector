@@ -7,6 +7,12 @@
 
 ### 修复
 
+- **Ultra 星尘方向反了、只有在 Fast 下才明显移动；Fast 非 Ultra 时挡位点没消失**。
+  `.cmes-sp` 的 drift 关键帧原来从左往右；改成从右往左。Ultra 峰值显式把
+  `animation-play-state` 设为 running，不依赖 Fast 才让星尘动起来。Fast 模式
+  （`.fast-mode`）下同时隐藏 `.cmes-dot`，非 Ultra 也不显示挡位点。
+  回归：`test/verify.mjs` 的 rail sparkle 检查。
+
 - **弹层向右偏 / 歪到右边（宿主给 composer 加了包含块）**。
   弹层原来留在 `.cmes-root` 里，靠「祖先没有 transform/filter/backdrop-filter」让
   `position:fixed` 相对视口；新版宿主只要在 composer 外层加了 transform/filter/
