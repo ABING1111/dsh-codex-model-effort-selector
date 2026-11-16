@@ -605,6 +605,8 @@ check('NEW: Ultra sparkles float, Fast runs right-to-left, and Fast hides the le
   assert.match(src, /className: `\$\{P\}-sparks \$\{P\}-sparks-float`/, 'the float layer is present');
   assert.match(src, /className: `\$\{P\}-sparks \$\{P\}-sparks-exit`/, 'the exit layer is present');
   assert.match(src, /className: `\$\{P\}-sparks \$\{P\}-sparks-run`/, 'the run layer is present');
+  assert.match(src, /const root = popupRef\.current;/, 'the run ramp reads the popover ref');
+  assert.doesNotMatch(src, /popoverRef/, 'the selector never references an undeclared popoverRef');
   assert.match(src, /animation\.currentTime = 0;[\s\S]{0,80}animation\.playbackRate = 0\.15;/,
     'the run layer ramps up from a slow rate');
   assert.match(src, /from\[index\] \* \(1 - t\)/, 'leaving Fast ramps the rate down');

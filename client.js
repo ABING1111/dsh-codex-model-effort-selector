@@ -798,7 +798,7 @@ body[data-ds-dark-theme] .${P}-root{
        * while the layer fades out. Falls back to normal CSS animation when the
        * Web Animations API is unavailable. */
       useEffect(() => {
-        const root = popoverRef.current;
+        const root = popupRef.current;
         if (!root || typeof root.querySelectorAll !== 'function'
           || typeof requestAnimationFrame !== 'function' || typeof performance === 'undefined') return undefined;
         const animations = Array.from(root.querySelectorAll(`.${P}-sp-run`))
