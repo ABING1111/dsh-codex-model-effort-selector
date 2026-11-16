@@ -7,6 +7,10 @@
 
 ### 修复
 
+- **两个插件的 Codex 样式突然消失**。run 速度渐变 effect 误用了不存在的
+  `popoverRef`，selector 在渲染前抛 `ReferenceError`，连带 `<style>` 一起没挂载。
+  改用真实的 `popupRef.current`，并加回归断言禁止再出现 `popoverRef`。
+
 - **Ultra 星尘应只漂浮、Fast 才 running；切换时星尘消失 / 瞬间变速**。
   `.cmes-sp` 拆成 float / exit / run 三层：Ultra 只走 `float`（上下轻浮，水平位置
   来自 `--x`）；切到 Fast 时 exit 层从原位置一起向左滑走、渐隐，run 层从右边
