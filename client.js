@@ -433,12 +433,16 @@ window.__ModuleLoader__.load({
 .${P}-dot.hovered{transform:scale(1.75)}
 .${P}-popover.peak .${P}-dot{opacity:0}
 .${P}-popover.fast-mode .${P}-dot{opacity:0}
-.${P}-sparks{opacity:0;transition:width .18s cubic-bezier(.2,.8,.2,1),opacity .25s ease}
-.${P}-popover.peak .${P}-sparks-float,.${P}-popover.fast-mode .${P}-sparks-run{opacity:1}
+.${P}-sparks{opacity:0;transition:width .18s cubic-bezier(.2,.8,.2,1),opacity .8s ease}
+.${P}-popover.peak:not(.fast-mode) .${P}-sparks-float,
+.${P}-popover.peak.fast-mode .${P}-sparks-exit,
+.${P}-popover.fast-mode .${P}-sparks-run{opacity:1}
+.${P}-popover.peak.fast-mode .${P}-sparks-float{opacity:0;transition:none}
 .${P}-sp{position:absolute;left:var(--x,4%);width:3px;height:3px;border-radius:50%;background:#fff;opacity:var(--b,1);transform:scale(var(--b,1))}
 .${P}-sp-float{animation:${P}-float var(--dur,3s) ease-in-out infinite;animation-delay:var(--delay,0s)}
+.${P}-sp-exit{opacity:0}
+.${P}-popover.peak.fast-mode .${P}-sp-exit{animation:${P}-exit .6s linear forwards}
 .${P}-sp-run{left:104%;opacity:0;animation:${P}-drift var(--dur,3s) linear infinite;animation-delay:var(--delay,0s)}
-.${P}-popover.peak.fast-mode .${P}-sp-float{animation:${P}-exit .6s linear forwards}
 @keyframes ${P}-float{0%,100%{transform:translateY(0) scale(var(--b,1));opacity:var(--b,1)}50%{transform:translateY(-3px) scale(var(--b,1));opacity:calc(var(--b,1)*.72)}}
 @keyframes ${P}-exit{0%{left:var(--x,4%);opacity:var(--b,1)}100%{left:-4%;opacity:0}}
 @keyframes ${P}-drift{0%{left:104%;opacity:0}6%{opacity:var(--b,1)}94%{opacity:var(--b,1)}100%{left:-4%;opacity:0}}
@@ -770,6 +774,10 @@ body[data-ds-dark-theme] .${P}-root{
       const fastBtnRef = useRef(null);
       const previewRef = useRef(null);
       const dragRef = useRef(false);
+      /* click-vs-drag: a press that never moves should animate to a stop, not
+       * paint the pointer position onto the rail on pointerdown. */
+      const dragStartRef = useRef(null);
+      const dragMovedRef = useRef(false);
       /* which pointerId owns the active drag (multi-pointer safety) */
       const pointerRef = useRef(null);
       const busyRef = useRef(false);
@@ -784,6 +792,40 @@ body[data-ds-dark-theme] .${P}-root{
        * mounted value belongs to (the seat may be reused across sessions) */
       const fastRef = useRef(fast);
       fastRef.current = fast;
+
+      /* Ramp the run layer's playbackRate instead of switching speed instantly:
+       * entering Fast starts at 0.15x and eases to 1x; leaving it eases to 0
+       * while the layer fades out. Falls back to normal CSS animation when the
+       * Web Animations API is unavailable. */
+      useEffect(() => {
+        const root = popoverRef.current;
+        if (!root || typeof root.querySelectorAll !== 'function'
+          || typeof requestAnimationFrame !== 'function' || typeof performance === 'undefined') return undefined;
+        const animations = Array.from(root.querySelectorAll(`.${P}-sp-run`))
+          .flatMap(node => (typeof node.getAnimations === 'function' ? node.getAnimations() : []));
+        if (!animations.length) return undefined;
+        if (fast) {
+          animations.forEach(animation => {
+            animation.currentTime = 0;
+            animation.playbackRate = 0.15;
+          });
+        }
+        const from = animations.map(animation => animation.playbackRate || 1);
+        const started = performance.now();
+        const duration = fast ? 900 : 800;
+        let frame = 0;
+        const step = (now) => {
+          const t = Math.min(1, (now - started) / duration);
+          animations.forEach((animation, index) => {
+            animation.playbackRate = fast
+              ? from[index] + (1 - from[index]) * t
+              : from[index] * (1 - t);
+          });
+          if (t < 1) frame = requestAnimationFrame(step);
+        };
+        frame = requestAnimationFrame(step);
+        return () => cancelAnimationFrame(frame);
+      }, [fast]);
       const fastSessionRef = useRef(sessionId);
 
       /* Every Fast change is written through, so it survives the remount that a
@@ -920,7 +962,18 @@ body[data-ds-dark-theme] .${P}-root{
       useEffect(() => {
         if (!dragging) return;
         const owns = e => pointerRef.current === null || e.pointerId === pointerRef.current;
-        const move = e => { if (owns(e) && dragRef.current) applyPointer(e.clientX); };
+        const move = e => {
+          if (!(owns(e) && dragRef.current)) return;
+          /* A click has not entered drag mode yet: wait for 3px of horizontal
+           * movement before painting the pointer onto the rail. */
+          if (!dragMovedRef.current) {
+            if (dragStartRef.current !== null && Math.abs(e.clientX - dragStartRef.current) < 3) return;
+            dragMovedRef.current = true;
+            setDragging(true);
+            try { railRef.current?.classList.add('dragging'); } catch { /* ignore */ }
+          }
+          applyPointer(e.clientX);
+        };
         const up = e => { if (owns(e) && dragRef.current) finish(e); };
         const cancel = e => { if (owns(e) && dragRef.current) cancelDrag(); };
         /* A release outside the window never reaches the document; focus loss is
@@ -1290,10 +1343,10 @@ body[data-ds-dark-theme] .${P}-root{
          * being granted it) can no longer strand a drag. */
         try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* non-fatal */ }
         dragRef.current = true;
+        dragStartRef.current = event.clientX;
+        dragMovedRef.current = false;
         pointerRef.current = event.pointerId;
-        setDragging(true);
         setHovered(-1);
-        applyPointer(event.clientX);
       }
 
       /* Hover feedback only. The drag branch lives in the document listener, so
@@ -1314,6 +1367,8 @@ body[data-ds-dark-theme] .${P}-root{
         if (!dragRef.current) return;
         dragRef.current = false;
         pointerRef.current = null;
+        dragStartRef.current = null;
+        dragMovedRef.current = false;
         setDragging(false);
         liveRef.current = null;
         /* Issue 3: snap the knob onto the nearest stop. Writing the snapped
@@ -1340,6 +1395,8 @@ body[data-ds-dark-theme] .${P}-root{
         if (!dragRef.current) return;
         dragRef.current = false;
         pointerRef.current = null;
+        dragStartRef.current = null;
+        dragMovedRef.current = false;
         setDragging(false);
         liveRef.current = null;
         previewRef.current = null;
@@ -1660,18 +1717,17 @@ body[data-ds-dark-theme] .${P}-root{
                 className: `${P}-dot${i <= index ? ' passed' : ''}${hovered === i ? ' hovered' : ''}`,
                 style: { [`--${P}-tick`]: efforts.length > 1 ? i / (efforts.length - 1) : 0 }
               })),
-              h('div', {
-                key: peak ? 'sparks-float-peak' : 'sparks-float-idle',
-                className: `${P}-sparks ${P}-sparks-float`
-              },
+              h('div', { className: `${P}-sparks ${P}-sparks-float` },
                 ...sparkles.map(s => h('i', {
                   key: s.key, className: `${P}-sp ${P}-sp-float`,
                   style: { left: s.x, top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
                 }))),
-              h('div', {
-                key: fast ? 'sparks-run-on' : 'sparks-run-off',
-                className: `${P}-sparks ${P}-sparks-run`
-              },
+              h('div', { className: `${P}-sparks ${P}-sparks-exit` },
+                ...sparkles.map(s => h('i', {
+                  key: s.key, className: `${P}-sp ${P}-sp-exit`,
+                  style: { left: s.x, top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
+                }))),
+              h('div', { className: `${P}-sparks ${P}-sparks-run` },
                 ...sparkles.map(s => h('i', {
                   key: s.key, className: `${P}-sp ${P}-sp-run`,
                   style: { top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }

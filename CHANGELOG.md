@@ -7,13 +7,16 @@
 
 ### 修复
 
-- **Ultra 星尘应只漂浮、Fast 才 running；方向反了；Fast 非 Ultra 时挡位点没消失**。
-  `.cmes-sp` 拆成 float / run 两层：Ultra 只走 `float`（上下轻浮，水平位置来自
-  `--x`）；切到 Fast 时 float 层用 `exit` 从原位置一起向左滑走，run 层从右边
-  104% 生成后向左 drift。Fast 模式同时隐藏 `.cmes-dot`，非 Ultra 也不显示挡位点。
-- **松开滑条时旋钮瞬移**。`.dragging` 会临时关掉 knob 的 `left` transition；
-  release 现在先移除该类，再在下一帧写回吸附位置，旋钮会滑到档位而不是瞬移。
-  回归：`test/verify.mjs` 的 rail sparkle / settle 检查。
+- **Ultra 星尘应只漂浮、Fast 才 running；切换时星尘消失 / 瞬间变速**。
+  `.cmes-sp` 拆成 float / exit / run 三层：Ultra 只走 `float`（上下轻浮，水平位置
+  来自 `--x`）；切到 Fast 时 exit 层从原位置一起向左滑走、渐隐，run 层从右边
+  104% 生成后向左 drift；退出 Fast 时 run 层的 `playbackRate` 在 800ms 内从 1x
+  缓降到 0x 并随容器渐隐，float 层同时渐现。进入 Fast 时 run 层从 0.15x 缓升到
+  1x，不瞬间满速。Fast 模式同时隐藏 `.cmes-dot`，非 Ultra 也不显示挡位点。
+- **点击挡位时旋钮瞬移**。按下时不再立刻把指针位置画到 rail 上；只有水平移动
+  超过 3px 才进入拖动。纯点击在 pointerup 时从当前档位滑到目标档位。
+  松开拖动时先移除 `.dragging`，下一帧再写回吸附位置，让 `.cmes-knob` 的
+  `left` transition 真正播放。回归：`test/verify.mjs` 的 rail sparkle / settle 检查。
 
 - **弹层向右偏 / 歪到右边（宿主给 composer 加了包含块）**。
   弹层原来留在 `.cmes-root` 里，靠「祖先没有 transform/filter/backdrop-filter」让

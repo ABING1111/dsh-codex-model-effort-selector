@@ -277,7 +277,7 @@ check('drag is continuous, not snapped while the pointer is down', () => {
   // through ONE applier so the press and the moves can never disagree
   assert.match(src, /function paintLive\(frac\)[\s\S]*?setProperty\(`--\$\{P\}-pos`, String\(frac\)\)/, 'paintLive writes fraction');
   assert.match(src, /function applyPointer\(clientX\) \{[\s\S]*?const frac = fractionAt\(clientX\)[\s\S]*?paintLive\(frac\)/, 'applyPointer tracks the pointer');
-  assert.match(src, /applyPointer\(e\.clientX\); \}/, 'the move listener feeds raw coordinates');
+  assert.match(src, /applyPointer\(e\.clientX\);/, 'the move listener feeds raw coordinates');
   // snapping belongs on release only
   assert.match(src, /function finish\(event\)[\s\S]*?nearestIndex\(event\.clientX\)/, 'finish snaps');
 });
@@ -575,6 +575,14 @@ check('NEW: the Fast toggle is remembered per conversation', () => {
   assert.match(src, /if \(typeof localStorage === 'undefined'\) return false;/, 'guards for storage absence');
 });
 
+check('NEW: a click slides to the level instead of painting on pointerdown', () => {
+  assert.match(src, /if \(!dragMovedRef\.current\) \{[\s\S]{0,300}setDragging\(true\)/,
+    'the rail only enters drag mode after a movement threshold');
+  const down = src.match(/function pointerDown\(event\) \{([\s\S]*?)\n      \}/);
+  assert.ok(down, 'pointerDown found');
+  assert.doesNotMatch(down[1], /applyPointer\(event\.clientX\)/, 'pointerdown does not jump the knob');
+});
+
 /* ── rail sparkles ─────────────────────────────────────────────────────── */
 
 check('NEW: Ultra sparkles float, Fast runs right-to-left, and Fast hides the level dots', () => {
@@ -590,12 +598,16 @@ check('NEW: Ultra sparkles float, Fast runs right-to-left, and Fast hides the le
   assert.match(src, /\.\$\{P\}-sp-float\{animation:\$\{P\}-float/, 'the float layer uses float');
   assert.match(src, /\.\$\{P\}-sp-run\{left:104%;opacity:0;animation:\$\{P\}-drift/,
     'the run layer starts off-screen right');
-  assert.match(src, /\.\$\{P\}-popover\.peak\.fast-mode \.\$\{P\}-sp-float\{animation:\$\{P\}-exit/,
+  assert.match(src, /\.\$\{P\}-popover\.peak\.fast-mode \.\$\{P\}-sp-exit\{animation:\$\{P\}-exit/,
     'turning Fast on at Ultra slides the existing dust left');
   assert.match(src, /\.\$\{P\}-popover\.fast-mode \.\$\{P\}-dot\{opacity:0\}/,
     'Fast mode hides the level dots outside Ultra');
-  assert.match(src, /key: peak \? 'sparks-float-peak' : 'sparks-float-idle'/, 'the float layer is keyed');
-  assert.match(src, /key: fast \? 'sparks-run-on' : 'sparks-run-off'/, 'the run layer restarts from the right');
+  assert.match(src, /className: `\$\{P\}-sparks \$\{P\}-sparks-float`/, 'the float layer is present');
+  assert.match(src, /className: `\$\{P\}-sparks \$\{P\}-sparks-exit`/, 'the exit layer is present');
+  assert.match(src, /className: `\$\{P\}-sparks \$\{P\}-sparks-run`/, 'the run layer is present');
+  assert.match(src, /animation\.currentTime = 0;[\s\S]{0,80}animation\.playbackRate = 0\.15;/,
+    'the run layer ramps up from a slow rate');
+  assert.match(src, /from\[index\] \* \(1 - t\)/, 'leaving Fast ramps the rate down');
 });
 
 /* ── rail settling ─────────────────────────────────────────────────────── */
