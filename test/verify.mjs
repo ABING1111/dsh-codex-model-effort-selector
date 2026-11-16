@@ -586,6 +586,8 @@ check('NEW: Ultra sparkles flow right-to-left and fast hides the level dots', ()
     'Ultra runs the sparkle animation without Fast');
   assert.match(src, /\.\$\{P\}-popover\.fast-mode \.\$\{P\}-dot\{opacity:0\}/,
     'Fast mode hides the level dots outside Ultra');
+  assert.match(src, /key: peak \? 'sparks-peak' : 'sparks-normal'/,
+    'entering Ultra remounts the sparkle layer so the flow visibly restarts');
 });
 
 /* ── the far-right arrival bloom ────────────────────────────────────────── */

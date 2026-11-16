@@ -1639,7 +1639,10 @@ body[data-ds-dark-theme] .${P}-root{
                 className: `${P}-dot${i <= index ? ' passed' : ''}${hovered === i ? ' hovered' : ''}`,
                 style: { [`--${P}-tick`]: efforts.length > 1 ? i / (efforts.length - 1) : 0 }
               })),
-              h('div', { className: `${P}-sparks` },
+              h('div', {
+                key: peak ? 'sparks-peak' : 'sparks-normal',
+                className: `${P}-sparks`
+              },
                 ...sparkles.map(s => h('i', {
                   key: s.key, className: `${P}-sp`,
                   style: { top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
