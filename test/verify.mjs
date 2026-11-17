@@ -58,7 +58,7 @@ const loaded = {};
 globalThis.window = {
   __ModuleLoader__: {
     load(def) {
-      assert.equal(def.id, 'dsh-codex-model-effort-selector', 'bundle id');
+      assert.equal(def.id, 'dsh-codex-selector', 'bundle id');
       loaded.mod = def.factory(requireStub);
     }
   },
@@ -125,7 +125,7 @@ check('apply() registers the composer model seat', () => {
   assert.deepEqual(slotCalls, ['conversation.input.model']);
   assert.ok(registered, 'slot registered');
   assert.equal(registered.def.name, 'conversation.input.model');
-  assert.equal(registered.def.locale, 'dsh-codex-model-effort-selector');
+  assert.equal(registered.def.locale, 'dsh-codex-selector');
   assert.equal(typeof registered.def.inject, 'function');
   assert.equal(typeof registered.Comp, 'function');
 });
@@ -159,7 +159,7 @@ check('owner-supplied props are not re-declared by inject()', () => {
 });
 
 check('dictionaries have identical key sets (zh/en)', () => {
-  const d = dictionary['dsh-codex-model-effort-selector'];
+  const d = dictionary['dsh-codex-selector'];
   assert.ok(d, 'dictionary registered');
   const zk = Object.keys(d.zh).sort();
   const ek = Object.keys(d.en).sort();

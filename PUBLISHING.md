@@ -35,7 +35,7 @@
 ### 1.1 先设一次 git 身份（只需一次）
 
 ```powershell
-git config --global user.name  "ABING1111"
+git config --global user.name  "CM-Silence"
 git config --global user.email "你的邮箱@example.com"
 ```
 
@@ -43,14 +43,14 @@ git config --global user.email "你的邮箱@example.com"
 
 打开 <https://github.com/new>：
 
-- **Repository name**：`dsh-codex-model-effort-selector`
+- **Repository name**：`dsh-codex-selector`
 - **Description**：`Codex desktop style model + reasoning-effort selector for DeepSeek Harness`
 - 可见性：**Public**
 - **不要**勾 Add a README / .gitignore / license —— 我们本地已经有了，勾了会冲突
 
-> 仓库名要和 `package.json` 里的 `name` 一致（已经是 `dsh-codex-model-effort-selector`）。
+> 仓库名要和 `package.json` 里的 `name` 一致（已经是 `dsh-codex-selector`）。
 > README 里的徽章链接、clone 命令、CHANGELOG 里的 compare 链接都按
-> `github.com/ABING1111/dsh-codex-model-effort-selector` 写好了 —— 如果你用了别的仓库名，
+> `github.com/CM-Silence/dsh-codex-selector` 写好了 —— 如果你用了别的仓库名，
 > 记得全文替换。
 
 ---
@@ -59,17 +59,17 @@ git config --global user.email "你的邮箱@example.com"
 
 工作区根目录 `C:\codex\推理滑块\` 里有大量**复刻过程的一次性脚本**（`measure*.py`、`refs/`、
 `prototype/`、`analysis/*.png`）。这些**不要**进仓库 —— 它们不是插件的一部分，只会让仓库变乱。
-**把 `plugin/dsh-codex-model-effort-selector/` 这一个目录作为仓库根**（本文件所在目录）。
+**把 `plugin/dsh-codex-selector/` 这一个目录作为仓库根**（本文件所在目录）。
 
 ```powershell
-cd "C:\codex\推理滑块\plugin\dsh-codex-model-effort-selector"
+cd "C:\codex\推理滑块\plugin\dsh-codex-selector"
 
 git init -b main
 git add .
 git status                      # 先看一眼：不该出现 node_modules / dist / docs/images/*.html
-git commit -m "feat: initial public release of dsh-codex-model-effort-selector"
+git commit -m "feat: initial public release of dsh-codex-selector"
 
-git remote add origin https://github.com/ABING1111/dsh-codex-model-effort-selector.git
+git remote add origin https://github.com/CM-Silence/dsh-codex-selector.git
 git push -u origin main
 ```
 
@@ -121,7 +121,7 @@ node test/make-readme-shots.mjs       # 需要本机有 Edge 或 Chrome
   用户 clone 或下载 ZIP 就能装
 
 > `CHANGELOG.md` 末尾的 compare 链接指向
-> `github.com/ABING1111/dsh-codex-model-effort-selector`，如果换了仓库名记得改。
+> `github.com/CM-Silence/dsh-codex-selector`，如果换了仓库名记得改。
 
 ---
 
@@ -130,7 +130,7 @@ node test/make-readme-shots.mjs       # 需要本机有 Edge 或 Chrome
 现在 `package.json` 里是 `"private": true`，**故意**如此。想发 npm 才删掉这一行：
 
 ```powershell
-cd "C:\codex\推理滑块\plugin\dsh-codex-model-effort-selector"
+cd "C:\codex\推理滑块\plugin\dsh-codex-selector"
 # 删掉 package.json 里的 "private": true
 npm login
 npm publish --access public
@@ -156,7 +156,7 @@ npm publish --access public
 
 ```powershell
 # 换个目录 clone 出来，验证包是自足的
-git clone https://github.com/ABING1111/dsh-codex-model-effort-selector.git $env:TEMP\dsh-verify
+git clone https://github.com/CM-Silence/dsh-codex-selector.git $env:TEMP\dsh-verify
 cd $env:TEMP\dsh-verify
 node test/verify.mjs
 node test/encoding.mjs

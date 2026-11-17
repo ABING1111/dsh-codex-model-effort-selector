@@ -1,4 +1,4 @@
-# 架构说明 · dsh-codex-model-effort-selector
+# 架构说明 · dsh-codex-selector
 
 插件的运行时结构：两半的生命周期、席位接管、弹层状态机、几何与色彩的推导、粒子与交互细节、测试台分工。像素测量与逐帧对照见 [SPEC.md](./SPEC.md)；每个已修缺陷的因果链见 [INCIDENTS.md](./INCIDENTS.md)。所有事实均可在 `client.js`（1817 行）、`test/*.mjs` 与 `README.md` 中核对。
 
@@ -21,7 +21,7 @@ bundle 是普通脚本，只调用一次模块加载器：
 
 ```js
 window.__ModuleLoader__.load({
-  id: 'dsh-codex-model-effort-selector',
+  id: 'dsh-codex-selector',
   factory(require) {
     const React = require('react');
     const h = React.createElement;

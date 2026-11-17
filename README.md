@@ -1,4 +1,4 @@
-# dsh-codex-model-effort-selector
+# dsh-codex-selector
 
 > 给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）用的
 > **Codex 桌面版风格「模型 + 推理强度」选择器**：
@@ -164,7 +164,7 @@ DSH 输入框上原本只有一枚很小的模型按钮。本插件用 `priority
 
 ```powershell
 dsh plugin --profile web add link:"<本目录的绝对路径>"
-dsh --profile web --dump-config    # 确认出现 dsh-codex-model-effort-selector
+dsh --profile web --dump-config    # 确认出现 dsh-codex-selector
 ```
 
 ### 验证已生效
@@ -179,7 +179,7 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 
 - **升级**：面板里重装 / 重新指向新目录，然后**完全退出并重开** DSH Desktop。
 - **卸载**：面板卸载；手工装的用
-  `dsh plugin --profile <profile> remove dsh-codex-model-effort-selector`。
+  `dsh plugin --profile <profile> remove dsh-codex-selector`。
 - ⚠️ **不要**用 `Remove-Item -Recurse` 删 junction（可能顺着链接删掉插件本体）。
 
 ---

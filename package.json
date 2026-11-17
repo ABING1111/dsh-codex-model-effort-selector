@@ -1,5 +1,5 @@
 {
-  "name": "dsh-codex-model-effort-selector",
+  "name": "dsh-codex-selector",
   "version": "1.1.2",
   "description": "Codex desktop style model + reasoning-effort selector for DeepSeek Harness: one trigger, one popover, a model list pane and a pixel-replica effort slider.",
   "type": "module",
@@ -16,11 +16,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ABING1111/dsh-codex-model-effort-selector.git"
+    "url": "git+https://github.com/CM-Silence/dsh-codex-selector.git"
   },
-  "homepage": "https://github.com/ABING1111/dsh-codex-model-effort-selector#readme",
+  "homepage": "https://github.com/CM-Silence/dsh-codex-selector#readme",
   "bugs": {
-    "url": "https://github.com/ABING1111/dsh-codex-model-effort-selector/issues"
+    "url": "https://github.com/CM-Silence/dsh-codex-selector/issues"
   },
   "exports": {
     ".": "./index.js",

@@ -67,7 +67,7 @@ for (const f of files) {
 
 check('README still has its real headings (not silently truncated)', () => {
   const md = readFileSync(join(ROOT, 'README.md'), 'utf8');
-  for (const h of ['# dsh-codex-model-effort-selector', '## 功能', '## 安装', '## 开发']) {
+  for (const h of ['# dsh-codex-selector', '## 功能', '## 安装', '## 开发']) {
     if (!md.includes(h)) throw new Error(`missing heading: ${h}`);
   }
   if (md.length < 4000) throw new Error(`README suspiciously short (${md.length} bytes)`);

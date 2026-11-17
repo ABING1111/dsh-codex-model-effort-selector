@@ -1,4 +1,4 @@
-# 缺陷复盘 · dsh-codex-model-effort-selector
+# 缺陷复盘 · dsh-codex-selector
 
 每个已修缺陷写成 **现象 → 根因 → 修法 → 断言** 四段。编号沿用 [README](../README.md) 的原始编号（因此不连续，缺 12+ 是因为那些号从未使用）。架构背景见 [ARCHITECTURE.md](./ARCHITECTURE.md)，像素测量见 [SPEC.md](./SPEC.md)。每个断言都能在 `test/*.mjs` 里找到对应的那一行。
 

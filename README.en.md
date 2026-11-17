@@ -1,4 +1,4 @@
-# dsh-codex-model-effort-selector
+# dsh-codex-selector
 
 > A **Codex-desktop-style "model + reasoning effort" selector** for
 > [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH):
@@ -183,7 +183,7 @@ from the CLI. Use the panel:
 
 ```powershell
 dsh plugin --profile web add link:"<absolute path to this directory>"
-dsh --profile web --dump-config    # confirm dsh-codex-model-effort-selector appears
+dsh --profile web --dump-config    # confirm dsh-codex-selector appears
 ```
 
 ### Verify it took effect
@@ -200,7 +200,7 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 - **Updating**: reinstall from the panel / point it at the new directory, then
   **fully quit and reopen** DSH Desktop.
 - **Uninstalling**: from the panel, or
-  `dsh plugin --profile <profile> remove dsh-codex-model-effort-selector`.
+  `dsh plugin --profile <profile> remove dsh-codex-selector`.
 - ⚠️ Do **not** delete a junction with `Remove-Item -Recurse` — it can follow the link
   and delete the plugin's own files.
 

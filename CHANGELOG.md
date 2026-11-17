@@ -286,5 +286,5 @@
 | 10 | 第一级每行右侧的灰色模型名冗余 | 第二级已经列出并标勾选 |
 | 11 | 蓝点在 provider 名左侧，与「状态在右」的阅读习惯相反 | 蓝点位置未随名字推到右侧 |
 
-[Unreleased]: https://github.com/ABING1111/dsh-codex-model-effort-selector/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/ABING1111/dsh-codex-model-effort-selector/releases/tag/v1.0.0
+[Unreleased]: https://github.com/CM-Silence/dsh-codex-selector/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/CM-Silence/dsh-codex-selector/releases/tag/v1.0.0

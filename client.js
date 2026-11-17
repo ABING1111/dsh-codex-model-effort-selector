@@ -23,7 +23,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: 'dsh-codex-model-effort-selector',
+  id: 'dsh-codex-selector',
   factory(require) {
     const React = require('react');
     let ReactDOM = null;
@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
       : null;
     const { useState, useEffect, useLayoutEffect, useRef, useSyncExternalStore, useMemo } = React;
 
-    const NS = 'dsh-codex-model-effort-selector';
+    const NS = 'dsh-codex-selector';
     const P = 'cmes';   // class prefix
     const POPOVER_WIDTH = 272;
     const POPOVER_MIN_HEIGHT = 104;
