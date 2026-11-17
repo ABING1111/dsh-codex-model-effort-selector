@@ -434,15 +434,14 @@ window.__ModuleLoader__.load({
 .${P}-popover.peak .${P}-dot{opacity:0}
 .${P}-popover.fast-mode .${P}-dot{opacity:0}
 .${P}-sparks{opacity:0;transition:width .18s cubic-bezier(.2,.8,.2,1),opacity .8s ease}
-.${P}-popover.peak:not(.fast-mode) .${P}-sparks-float,
-.${P}-popover.peak.fast-mode .${P}-sparks-exit,
+.${P}-popover.peak .${P}-sparks-float,
 .${P}-popover.fast-mode .${P}-sparks-run{opacity:1}
-.${P}-popover.peak.fast-mode .${P}-sparks-float{opacity:0;transition:none}
+.${P}-popover.peak:not(.fast-mode) .${P}-sparks-float{animation:${P}-fade-in .8s ease both}
 .${P}-sp{position:absolute;left:var(--x,4%);width:3px;height:3px;border-radius:50%;background:#fff;opacity:var(--b,1);transform:scale(var(--b,1))}
 .${P}-sp-float{animation:${P}-float var(--dur,3s) ease-in-out infinite;animation-delay:var(--delay,0s)}
-.${P}-sp-exit{opacity:0}
-.${P}-popover.peak.fast-mode .${P}-sp-exit{animation:${P}-exit .6s linear forwards}
+.${P}-popover.peak.fast-mode .${P}-sp-float{animation:${P}-exit 1.1s cubic-bezier(.37,0,.85,.35) forwards}
 .${P}-sp-run{left:104%;opacity:0;animation:${P}-drift var(--dur,3s) linear infinite;animation-delay:var(--delay,0s)}
+@keyframes ${P}-fade-in{from{opacity:0}to{opacity:1}}
 @keyframes ${P}-float{0%,100%{transform:translateY(0) scale(var(--b,1));opacity:var(--b,1)}50%{transform:translateY(-3px) scale(var(--b,1));opacity:calc(var(--b,1)*.72)}}
 @keyframes ${P}-exit{0%{left:var(--x,4%);opacity:var(--b,1)}100%{left:-4%;opacity:0}}
 @keyframes ${P}-drift{0%{left:104%;opacity:0}6%{opacity:var(--b,1)}94%{opacity:var(--b,1)}100%{left:-4%;opacity:0}}
@@ -1720,11 +1719,6 @@ body[data-ds-dark-theme] .${P}-root{
               h('div', { className: `${P}-sparks ${P}-sparks-float` },
                 ...sparkles.map(s => h('i', {
                   key: s.key, className: `${P}-sp ${P}-sp-float`,
-                  style: { left: s.x, top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
-                }))),
-              h('div', { className: `${P}-sparks ${P}-sparks-exit` },
-                ...sparkles.map(s => h('i', {
-                  key: s.key, className: `${P}-sp ${P}-sp-exit`,
                   style: { left: s.x, top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
                 }))),
               h('div', { className: `${P}-sparks ${P}-sparks-run` },

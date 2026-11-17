@@ -598,13 +598,15 @@ check('NEW: Ultra sparkles float, Fast runs right-to-left, and Fast hides the le
   assert.match(src, /\.\$\{P\}-sp-float\{animation:\$\{P\}-float/, 'the float layer uses float');
   assert.match(src, /\.\$\{P\}-sp-run\{left:104%;opacity:0;animation:\$\{P\}-drift/,
     'the run layer starts off-screen right');
-  assert.match(src, /\.\$\{P\}-popover\.peak\.fast-mode \.\$\{P\}-sp-exit\{animation:\$\{P\}-exit/,
-    'turning Fast on at Ultra slides the existing dust left');
+  assert.match(src, /\.\$\{P\}-popover\.peak\.fast-mode \.\$\{P\}-sp-float\{animation:\$\{P\}-exit 1\.1s cubic-bezier/,
+    'turning Fast on accelerates the same floating dust left');
+  assert.match(src, /\.\$\{P\}-popover\.peak:not\(\.fast-mode\) \.\$\{P\}-sparks-float\{animation:\$\{P\}-fade-in/,
+    'leaving Fast fades the float layer back in');
   assert.match(src, /\.\$\{P\}-popover\.fast-mode \.\$\{P\}-dot\{opacity:0\}/,
     'Fast mode hides the level dots outside Ultra');
   assert.match(src, /className: `\$\{P\}-sparks \$\{P\}-sparks-float`/, 'the float layer is present');
-  assert.match(src, /className: `\$\{P\}-sparks \$\{P\}-sparks-exit`/, 'the exit layer is present');
   assert.match(src, /className: `\$\{P\}-sparks \$\{P\}-sparks-run`/, 'the run layer is present');
+  assert.doesNotMatch(src, /sparks-exit/, 'there is no cloned exit layer to disappear');
   assert.match(src, /const root = popupRef\.current;/, 'the run ramp reads the popover ref');
   assert.doesNotMatch(src, /popoverRef/, 'the selector never references an undeclared popoverRef');
   assert.match(src, /animation\.currentTime = 0;[\s\S]{0,80}animation\.playbackRate = 0\.15;/,

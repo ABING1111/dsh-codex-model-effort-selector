@@ -12,11 +12,15 @@
   改用真实的 `popupRef.current`，并加回归断言禁止再出现 `popoverRef`。
 
 - **Ultra 星尘应只漂浮、Fast 才 running；切换时星尘消失 / 瞬间变速**。
-  `.cmes-sp` 拆成 float / exit / run 三层：Ultra 只走 `float`（上下轻浮，水平位置
-  来自 `--x`）；切到 Fast 时 exit 层从原位置一起向左滑走、渐隐，run 层从右边
+  Ultra 的 float 层在打开 Fast 时不再被隐藏或替换成克隆层；同一批星尘直接切到
+  `exit`（1.1s ease-in），从当前 `--x` 缓慢加速向左并渐隐。run 层同时从右边
   104% 生成后向左 drift；退出 Fast 时 run 层的 `playbackRate` 在 800ms 内从 1x
-  缓降到 0x 并随容器渐隐，float 层同时渐现。进入 Fast 时 run 层从 0.15x 缓升到
-  1x，不瞬间满速。Fast 模式同时隐藏 `.cmes-dot`，非 Ultra 也不显示挡位点。
+  缓降到 0x 并随容器渐隐，float 层用 `fade-in` 渐现。进入 Fast 时 run 层从
+  0.15x 缓升到 1x，不瞬间满速。Fast 模式同时隐藏 `.cmes-dot`，非 Ultra 也不显示挡位点。
+- **dsh-mo-image 在 codex 弹层 portal 后不再切换 Codex 皮肤**。原探针只在
+  `.cmes-root` 内找 `.cmes-popover`，而 codex 已把弹层 portal 到 body；现在改为
+  在 document 里找（排除生图席自己的 `#mo-image-codex-popover`），再检查
+  `.cmes-page` 与 `position:fixed`。
 - **点击挡位时旋钮瞬移**。按下时不再立刻把指针位置画到 rail 上；只有水平移动
   超过 3px 才进入拖动。纯点击在 pointerup 时从当前档位滑到目标档位。
   松开拖动时先移除 `.dragging`，下一帧再写回吸附位置，让 `.cmes-knob` 的
