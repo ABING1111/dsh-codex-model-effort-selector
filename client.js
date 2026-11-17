@@ -1719,7 +1719,7 @@ body[data-ds-dark-theme] .${P}-root{
               h('div', { className: `${P}-sparks ${P}-sparks-float` },
                 ...sparkles.map(s => h('i', {
                   key: s.key, className: `${P}-sp ${P}-sp-float`,
-                  style: { left: s.x, top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
+                  style: { left: s.x, '--x': s.x, top: s.top, [`--b`]: s.b, [`--dur`]: s.dur, [`--delay`]: s.delay }
                 }))),
               h('div', { className: `${P}-sparks ${P}-sparks-run` },
                 ...sparkles.map(s => h('i', {

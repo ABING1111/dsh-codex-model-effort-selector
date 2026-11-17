@@ -595,6 +595,7 @@ check('NEW: Ultra sparkles float, Fast runs right-to-left, and Fast hides the le
   assert.match(src, /@keyframes \$\{P\}-float/, 'Ultra has a float-only animation');
   assert.match(src, /x: \(4 \+ 92 \* hash01\(i \* 17 \+ 9\)\)/, 'floating particles are spread horizontally');
   assert.match(src, /left: s\.x/, 'the spread is applied inline');
+  assert.match(src, /'--x': s\.x/, 'the exit keyframes start from each sparkle position');
   assert.match(src, /\.\$\{P\}-sp-float\{animation:\$\{P\}-float/, 'the float layer uses float');
   assert.match(src, /\.\$\{P\}-sp-run\{left:104%;opacity:0;animation:\$\{P\}-drift/,
     'the run layer starts off-screen right');
