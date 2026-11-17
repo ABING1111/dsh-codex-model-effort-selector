@@ -7,6 +7,12 @@
 
 ### 修复
 
+- **窄屏折叠成图标时，模型图标消失**。宿主在
+  `.GRgSLq_row[data-model-compact]` 上把 `--dsh-composer-model-icon-display`
+  设为 `block`，但 `.cmes-compact` 里的 SVG 没有宽高也没有 `flex:none`，
+  在 `inline-flex` 触发器里被压成 0。现在 compact 容器固定 16×16、`flex:none`，
+  SVG 也显式 16×16，和官方 triggerIcon 的契约一致。
+
 - **两个插件的 Codex 样式突然消失**。run 速度渐变 effect 误用了不存在的
   `popoverRef`，selector 在渲染前抛 `ReferenceError`，连带 `<style>` 一起没挂载。
   改用真实的 `popupRef.current`，并加回归断言禁止再出现 `popoverRef`。

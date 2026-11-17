@@ -615,6 +615,15 @@ check('NEW: Ultra sparkles float, Fast runs right-to-left, and Fast hides the le
   assert.match(src, /from\[index\] \* \(1 - t\)/, 'leaving Fast ramps the rate down');
 });
 
+/* ── compact composer seat ─────────────────────────────────────────────── */
+
+check('NEW: the icon-only composer seat keeps a visible model icon', () => {
+  assert.match(src, /\.\$\{P\}-compact\{display:var\(--dsh-composer-model-icon-display,none\);flex:none;width:16px;height:16px/,
+    'the icon gets a non-shrinking box in compact mode');
+  assert.match(src, /\.\$\{P\}-compact svg\{width:16px;height:16px;display:block\}/,
+    'the SVG itself is sized instead of collapsing');
+});
+
 /* ── rail settling ─────────────────────────────────────────────────────── */
 
 check('NEW: releasing a drag slides the knob instead of teleporting', () => {

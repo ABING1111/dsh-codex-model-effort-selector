@@ -337,7 +337,8 @@ window.__ModuleLoader__.load({
    another ~21px for the ⚡ — the level slid past the ellipsis and disappeared. */
 .${P}-caption{flex:0 1 auto;display:var(--dsh-composer-model-text-display,inline);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .${P}-triggerEffort{flex:none;display:var(--dsh-composer-model-text-display,inline);white-space:nowrap;color:var(--${P}-ink,var(--dsw-alias-label-caption));transition:color .2s ease}
-.${P}-compact{display:var(--dsh-composer-model-icon-display,none)}
+.${P}-compact{display:var(--dsh-composer-model-icon-display,none);flex:none;width:16px;height:16px;align-items:center;justify-content:center}
+.${P}-compact svg{width:16px;height:16px;display:block}
 .${P}-chev{width:12px;height:12px;flex:none;color:var(--dsw-alias-label-caption);transition:transform .12s ease}
 .${P}-trigger[aria-expanded=true] .${P}-chev{transform:rotate(180deg)}
 
