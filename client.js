@@ -32,6 +32,15 @@ window.__ModuleLoader__.load({
     const NS = 'dsh-codex-model-effort-selector';
     const P = 'cmes';   // class prefix
 
+    /* Stand-in for the slot runtime's projection hook. Kept separate from the
+     * component so the hook count never changes when a host does not provide
+     * `useProjection` (DSH < 0.2.2, or a seat rendered outside a Session). */
+    function useNoProjection() { return undefined; }
+
+    /* Effort pane height with the Agent Teams row: the slider ends at 92 and the
+     * 34px row sits at 96, plus 8px of bottom breathing room. */
+    const TEAM_PANE_H = 138;
+
     /* ------------------------------------------------------------------ *
      * Copy
      * ------------------------------------------------------------------ */
@@ -47,6 +56,9 @@ window.__ModuleLoader__.load({
       busy: '正在切换', failed: '切换失败',
       unavailable: '此会话不能切换模型',
       search: '搜索模型', noMatch: '没有匹配的模型', clear: '清除搜索',
+      team: '多团队协作',
+      teamDesc: '开启后由多个子代理协同完成当前会话的工作，可在任务面板查看进度',
+      teamFailed: '协作开关切换失败',
       'effort.off': '关闭', 'effort.minimal': '极低', 'effort.low': '轻度',
       'effort.medium': '中', 'effort.high': '高', 'effort.xhigh': '极高',
       'effort.max': 'Ultra'
@@ -60,6 +72,9 @@ window.__ModuleLoader__.load({
       busy: 'Switching', failed: 'Selection failed',
       unavailable: 'Model selection unavailable',
       search: 'Search models', noMatch: 'No matching models', clear: 'Clear search',
+      team: 'Agent Teams',
+      teamDesc: 'Let subagents work on this session together; progress appears in the task panel',
+      teamFailed: 'Could not switch Agent Teams',
       'effort.off': 'Off', 'effort.minimal': 'Minimal', 'effort.low': 'Light',
       'effort.medium': 'Medium', 'effort.high': 'High', 'effort.xhigh': 'Extra High',
       'effort.max': 'Ultra'
@@ -267,6 +282,10 @@ window.__ModuleLoader__.load({
      * ------------------------------------------------------------------ */
     const CSS = `
 .${P}-root{position:relative;display:inline-flex;min-width:0;font-family:var(--dsw-font-family);font-size:14px;letter-spacing:0}
+/* Containing-block probe: a fixed element at the block's top-left and bottom
+   edges, zero-wide and invisible. Its rect is the block itself, so the two
+   overlays can be placed with real numbers instead of guessed ancestors. */
+.${P}-probe{position:fixed;left:0;top:0;bottom:0;width:0;margin:0;padding:0;border:0;visibility:hidden;pointer-events:none;z-index:-1}
 .${P}-root *{box-sizing:border-box;corner-shape:round}
 .${P}-root button{font:inherit;cursor:pointer;border:0;background:transparent;color:inherit}
 
@@ -316,7 +335,7 @@ window.__ModuleLoader__.load({
 .${P}-tip .${P}-tipTitle{color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:18px}
 
 /* ---------- popover ---------- */
-.${P}-popover{position:fixed;bottom:var(--${P}-bottom,40px);left:var(--${P}-left,12px);width:272px;max-width:calc(100vw - 24px);height:var(--${P}-height,104px);max-height:calc(100vh - var(--${P}-bottom,40px) - 12px);padding:0;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));border-radius:14px;box-shadow:var(--dsw-elevation-panel);backdrop-filter:var(--dsw-menu-backdrop-filter);z-index:1100;overflow:hidden;transform-origin:bottom left;transition:opacity .18s ease,transform .18s ease,height .2s cubic-bezier(.2,.8,.2,1),visibility 0s}
+.${P}-popover{position:fixed;bottom:var(--${P}-bottom,40px);left:var(--${P}-left,12px);width:272px;max-width:calc(100vw - 24px);height:var(--${P}-height,104px);max-height:var(--${P}-room,calc(100vh - 52px));padding:0;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));border-radius:14px;box-shadow:var(--dsw-elevation-panel);backdrop-filter:var(--dsw-menu-backdrop-filter);z-index:1100;overflow:hidden;transform-origin:bottom left;transition:opacity .18s ease,transform .18s ease,height .2s cubic-bezier(.2,.8,.2,1),visibility 0s}
 .${P}-popover.closed{opacity:0;pointer-events:none;visibility:hidden;transform:translateY(5px) scale(.98);transition-delay:0s,0s,0s,.18s}
 .${P}-popover.peak{--dsw-elevation-stroke-color:rgba(145,78,246,.28)}
 
@@ -325,7 +344,7 @@ window.__ModuleLoader__.load({
 .${P}-pane.hidden{opacity:0;pointer-events:none;visibility:hidden;transform:translateY(5px);transition-delay:0s,0s,.14s}
 
 /* ---------- effort pane ---------- */
-.${P}-main{height:104px}
+.${P}-main{height:var(--${P}-main-h,104px)}
 .${P}-tool{position:absolute;top:7px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;padding:0;border-radius:8px;color:var(--dsw-alias-label-caption)}
 .${P}-tool:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .${P}-fast{left:7px}
@@ -425,6 +444,22 @@ window.__ModuleLoader__.load({
 .${P}-rail.dragging .${P}-fill{transition:none}
 .${P}-rail.dragging{cursor:grabbing}
 .${P}-noeffort{position:absolute;top:65px;left:12px;right:12px;text-align:center;font-size:12px;line-height:26px;color:var(--dsw-alias-label-secondary)}
+/* ---------- Agent Teams row (DSH >= 0.2.2) ----------
+   DSH puts this switch in the model menu's root pane; this plugin's own menu
+   replaces that pane, so the row is re-created here below the slider with the
+   host's own metrics: 34px tall, 13/20 label, 8px inset, --dsw-radius-md, and
+   the interactive hover wash. */
+.${P}-team{position:absolute;left:8px;right:8px;top:96px;display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:34px;padding:0 8px;border-radius:var(--dsw-radius-md);color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px}
+.${P}-teamLabel{display:inline-flex;align-items:center;gap:4px;min-width:0}
+.${P}-teamInfo{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:none;padding:0;color:var(--dsw-alias-label-caption);cursor:help}
+.${P}-teamInfo svg{width:11px;height:11px}
+.${P}-root .${P}-teamSwitch{position:relative;flex:none;width:32px;height:18px;padding:0;border:0;border-radius:999px;background:var(--dsw-alias-interactive-bg-hover-solid,#cfd1d6);cursor:pointer;transition:background .16s ease}
+.${P}-root .${P}-teamSwitch[aria-checked=true]{background:var(--dsw-alias-state-business-primary,#4d6bfe)}
+.${P}-root .${P}-teamSwitch:disabled{opacity:.45;cursor:default}
+.${P}-root .${P}-teamSwitch:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:2px}
+.${P}-root .${P}-teamSwitch::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.22);transition:transform .16s ease}
+.${P}-root .${P}-teamSwitch[aria-checked=true]::after{transform:translateX(14px)}
+@media (hover:hover){.${P}-team:hover{background:var(--dsw-alias-interactive-bg-hover)}}
 @media (prefers-reduced-motion:reduce){
   .${P}-sp{animation-duration:calc(var(--dur,3s) * 2.6)}
   /* the arrival burst is pure decoration; collapse it instead of slowing it,
@@ -531,6 +566,7 @@ body[data-ds-dark-theme] .${P}-root{
       down: 'm6 9 6 6 6-6',
       check: 'm20 6-11 11-5-5',
       reset: 'M3 11a9 9 0 1 1 2.6 7M3 4v7h7',
+      info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v5M12 7.4v.01',
       close: 'M6 6l12 12M18 6L6 18',
       search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-4-4',
       model: 'M12 3 3 8l9 5 9-5-9-5ZM3 12l9 5 9-5M3 16l9 5 9-5',
@@ -656,7 +692,7 @@ body[data-ds-dark-theme] .${P}-root{
     /* ================================================================== *
      * Selector component
      * ================================================================== */
-    function Selector({ directory, load, select, available, locked, t, renderSlot, sessionId }) {
+    function Selector({ directory, load, select, available, locked, t, renderSlot, sessionId, setTeamMode, useProjection }) {
       const state = useSyncExternalStore(
         fn => directory.subscribe(fn),
         () => directory.getSnapshot()
@@ -690,8 +726,32 @@ body[data-ds-dark-theme] .${P}-root{
       const [view, setView] = useState(1);
       const [subProvider, setSubProvider] = useState(null);
 
+      /* ---------- Agent Teams switch (DSH >= 0.2.2) ----------
+       * DSH ships its own "Agent Teams" switch as an occupant of
+       * `conversation.input.model.options` — the root menu of the model seat
+       * this plugin replaces — so replacing the seat without re-creating the
+       * switch loses it. There is no client-visible DSH version string, so the
+       * version gate is the capability itself: `agentTeam` exists as a Session
+       * projection only on a host that ships Agent Teams (0.2.2+), and the
+       * `remote.agentTeams` verb appears with it. Older hosts leave
+       * `useProjection` absent and the row is never rendered.
+       *
+       * `useProjection` is a slot-runtime prop; the fallback keeps the hook
+       * count identical on hosts that do not provide it. */
+      const useTeamProjection = typeof useProjection === 'function' ? useProjection : useNoProjection;
+      const teamMode = useTeamProjection('agentTeam');
+      const [teamPending, setTeamPending] = useState(false);
+
       const rootRef = useRef(null);
       const popupRef = useRef(null);
+      /* Zero-size fixed probe. Whatever the engine makes the containing block
+       * for `position: fixed`, a fixed element at left/top 0 and bottom 0 lands
+       * on that box's padding edges, so its rect IS the containing block — in
+       * viewport coordinates, with no need to guess which ancestor does it.
+       * DSH 0.2.2-rc.5 turned the composer into one (`will-change: transform`
+       * on `.composerSeat`), which is why the popover used to be placed with
+       * viewport numbers and land far from its trigger. */
+      const probeRef = useRef(null);
       const railRef = useRef(null);
       const triggerRef = useRef(null);
       const searchRef = useRef(null);
@@ -744,12 +804,56 @@ body[data-ds-dark-theme] .${P}-root{
       const dark = useDarkTheme();
       const modelName = model?.name || selection?.model || t('choose');
       const disabled = Boolean(locked || !available);
+
+      /* Agent Teams row: a root Session on a host that has both the projection
+       * and the write verb. Everything is capability-gated, so a host without
+       * Agent Teams renders exactly the old 104px effort pane. */
+      const teamSupported = teamMode !== undefined
+        && teamMode !== null
+        && typeof setTeamMode === 'function'
+        && available;
+      const teamEnabled = teamSupported && teamMode.enabled === true;
+
+      /* Save the selection. DSH's own switch asks for a confirmation before it
+       * switches Teams OFF; that overlay belongs to the agent-team plugin and is
+       * not reachable from here, so this switch writes the same verb directly
+       * and reports a failure in the menu's existing status strip instead. */
+      function changeTeam(enabled) {
+        if (!teamSupported || teamPending) return;
+        setTeamPending(true);
+        setError('');
+        Promise.resolve(setTeamMode(enabled)).then((result) => {
+          const failure = result && result.ok === false
+            ? ((result.error && result.error.message) || t('teamFailed'))
+            : null;
+          if (failure) setError(failure);
+        }, (cause) => {
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }).finally(() => { if (mountedRef.current) setTeamPending(false); });
+      }
       const sparkles = useMemo(() => buildSparkles(22), []);
       const bloomMotes = useMemo(() => buildBloom(BLOOM_COUNT), []);
       const isLastStop = efforts.length > 1 && index === efforts.length - 1;
       const tipShown = tipOn && open && pane === 'effort';
 
       latest.current = { open: present, fast, peak, pane, efforts, index, savedEffort, view };
+
+      /* The containing block of our fixed layers, in viewport coordinates,
+       * measured from the probe element (see `probeRef`): its top-left corner is
+       * the block's padding origin and its bottom edge is the block's bottom.
+       * When the probe is not mounted yet, the viewport is the block. */
+      function containingBox() {
+        const probe = probeRef.current;
+        if (probe) {
+          const box = probe.getBoundingClientRect();
+          return { left: box.left, top: box.top, bottom: box.bottom };
+        }
+        return {
+          left: 0,
+          top: 0,
+          bottom: typeof window === 'undefined' ? 0 : window.innerHeight
+        };
+      }
 
       /* Place the Fast tooltip in the VIEWPORT, above its button.
        * Only correct because the tooltip now lives under `.cmes-root`; while it
@@ -763,8 +867,12 @@ body[data-ds-dark-theme] .${P}-root{
         const tw = tip.offsetWidth || 120;
         const th = tip.offsetHeight || 44;
         const left = Math.max(8, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 8));
-        tip.style.left = `${left}px`;
-        tip.style.top = `${Math.max(8, r.top - th - 7)}px`;
+        const top = Math.max(8, r.top - th - 7);
+        /* The tooltip is fixed too, so its numbers are read by the browser
+         * against the composer's containing block, not the window. */
+        const box = containingBox();
+        tip.style.left = `${left - box.left}px`;
+        tip.style.top = `${top - box.top}px`;
       }
 
       /* ---------- effects ---------- */
@@ -1026,9 +1134,17 @@ body[data-ds-dark-theme] .${P}-root{
           if (!trigger || !popup || !rootRef.current) return;
           const width = Math.min(272, window.innerWidth - 24);
           const left = Math.max(12, Math.min((trigger.left + trigger.right - width) / 2, window.innerWidth - width - 12));
-          const bottom = Math.max(12, window.innerHeight - trigger.top + 8);
-          rootRef.current.style.setProperty(`--${P}-left`, `${left}px`);
-          rootRef.current.style.setProperty(`--${P}-bottom`, `${bottom}px`);
+          /* The popover is `position: fixed`, so the browser reads these two
+           * numbers against its containing block, not the window. Rebase them
+           * with the measured block; with no containing block (viewport) the
+           * origin is 0,0 and the viewport bottom, i.e. the original numbers. */
+          const box = containingBox();
+          rootRef.current.style.setProperty(`--${P}-left`, `${left - box.left}px`);
+          rootRef.current.style.setProperty(`--${P}-bottom`, `${Math.max(12, box.bottom - trigger.top + 8)}px`);
+          /* Space above the trigger, in viewport pixels: drives the popover's
+           * height clamp, which can no longer be derived from `--cmes-bottom`
+           * (that number is relative to the containing block now). */
+          rootRef.current.style.setProperty(`--${P}-room`, `${Math.max(120, trigger.top - 20)}px`);
         }
         function resized() {
           cancelAnimationFrame(frame);
@@ -1311,14 +1427,22 @@ body[data-ds-dark-theme] .${P}-root{
 
       /* Issue 2: cap the requested height to the space actually available above
        * the trigger, so a long provider list scrolls INSIDE the panel instead of
-       * overflowing the window. `--cmes-bottom` is the very variable the
-       * positioning effect writes, so this tracks the real anchor. */
-      const bottomVar = rootRef.current
-        ? parseFloat(getComputedStyle(rootRef.current).getPropertyValue(`--${P}-bottom`)) || 40
-        : 40;
+       * overflowing the window. `--cmes-room` is what the positioning effect
+       * writes; on the very first open it is still unset, so fall back to the
+       * trigger's own rect (and, failing that, to the viewport). */
+      const roomVar = rootRef.current
+        ? parseFloat(getComputedStyle(rootRef.current).getPropertyValue(`--${P}-room`)) || 0
+        : 0;
+      const triggerTop = triggerRef.current
+        ? triggerRef.current.getBoundingClientRect().top
+        : 0;
       const roomAbove = typeof window === 'undefined'
         ? Infinity
-        : Math.max(120, window.innerHeight - bottomVar - 24);
+        : roomVar > 0
+          ? Math.max(120, roomVar)
+          : triggerTop > 0
+            ? Math.max(120, triggerTop - 20)
+            : Math.max(120, window.innerHeight - 52);
       const cappedHeight = Math.min(menuHeight, roomAbove);
 
       const classes = [
@@ -1439,7 +1563,10 @@ body[data-ds-dark-theme] .${P}-root{
       /* --- effort pane --- */
       const effortView = h('div', {
         className: `${P}-pane ${P}-main${pane !== 'effort' ? ' hidden' : ''}`,
-        inert: pane !== 'effort' ? '' : undefined
+        inert: pane !== 'effort' ? '' : undefined,
+        /* the Agent Teams row needs 34px more pane; the popover height above
+         * uses the same constant, so both grow together */
+        style: { [`--${P}-main-h`]: `${teamSupported ? TEAM_PANE_H : 104}px` }
       },
         h('button', {
           className: `${P}-tool ${P}-fast${fast ? ' active' : ''}`,
@@ -1538,10 +1665,42 @@ body[data-ds-dark-theme] .${P}-root{
                     })))
                 : null,
               h('div', { className: `${P}-knob` }))
-          : h('div', { className: `${P}-noeffort` }, t('unsupported')));
+          : h('div', { className: `${P}-noeffort` }, t('unsupported')),
+
+        /* Agent Teams: the switch DSH places in the model menu's root pane,
+         * re-created under the slider. Hidden entirely on hosts without the
+         * capability, so the pane keeps its original 104px shape there. */
+        teamSupported
+          ? h('div', { className: `${P}-team` },
+              h('span', { className: `${P}-teamLabel` },
+                h('span', null, t('team')),
+                h('button', {
+                  type: 'button',
+                  className: `${P}-teamInfo`,
+                  'aria-label': t('teamDesc'),
+                  /* native tooltip: the host's Tooltip primitive portals, and a
+                   * portalled fixed layer inside this composer would resolve
+                   * against the composer's containing block — the exact class of
+                   * bug this build fixes for the popover itself. */
+                  title: t('teamDesc'),
+                  onClick: event => { event.preventDefault(); event.stopPropagation(); }
+                }, icon('info', `${P}-teamInfoIcon`))),
+              h('button', {
+                type: 'button', role: 'switch',
+                className: `${P}-teamSwitch`,
+                'aria-checked': teamEnabled ? 'true' : 'false',
+                'aria-label': t('team'),
+                disabled: Boolean(locked || teamPending),
+                onClick: () => changeTeam(!teamEnabled)
+              }))
+          : null);
 
       return h('div', { className: `${P}-root`, ref: rootRef },
         h('style', null, CSS),
+
+        /* invisible containing-block probe; both fixed layers are placed from
+         * its rect (see `containingBox`) */
+        h('div', { ref: probeRef, className: `${P}-probe`, 'aria-hidden': true }),
 
         h('button', {
           className: `${P}-trigger${isPeakId(savedEffort) ? ' peak' : ''}${fast ? ' fast' : ''}`,
@@ -1590,7 +1749,7 @@ body[data-ds-dark-theme] .${P}-root{
           'aria-label': pane === 'models' ? t('model') : t('effort'),
           'aria-hidden': !open, inert: !open ? '' : undefined,
           style: {
-            [`--${P}-height`]: `${pane === 'models' ? cappedHeight : 104}px`,
+            [`--${P}-height`]: `${pane === 'models' ? cappedHeight : (teamSupported ? TEAM_PANE_H : 104)}px`,
             /* the heading ink is stamped here so the effort pane's title picks
              * up the current level's colour */
             [`--${P}-ink`]: inkFor(displayed, dark)
@@ -1599,7 +1758,7 @@ body[data-ds-dark-theme] .${P}-root{
           modelsView,
           effortView,
           busy ? h('div', { className: `${P}-sr`, role: 'status' }, t('busy')) : null,
-          status ? h('div', { className: `${P}-status`, role: 'alert', style: { position: 'absolute', left: 12, right: 12, bottom: 6, color: 'var(--dsw-alias-state-error-primary)' } },
+          status ? h('div', { className: `${P}-status`, role: 'alert', style: { position: 'absolute', left: 12, right: 12, bottom: teamSupported ? 44 : 6, color: 'var(--dsw-alias-state-error-primary)' } },
             h('span', null, status)) : null),
 
         /* THE FAST TOOLTIP — a sibling of the popover, NOT a descendant of it.
@@ -1625,38 +1784,65 @@ body[data-ds-dark-theme] .${P}-root{
      * Plugin
      * ================================================================== */
     return {
-      inject: ['slots', 'modelDirectories', 'sessions', 'locale'],
+      /* ModelDirectoryResolver (ctx.modelDirectories) is a cordis Service whose
+       * own fiber declares
+       *   static inject = ['sessions', 'remote', 'remote.session'];
+       * A caller re-entering the service through the proxy runs on the CALLER's
+       * fiber, so this plugin must inject the same names. Without them the
+       * first directoryFor() throws "cannot get property \"remote.session\"
+       * without inject" and the seat crashes at render time. The shipped
+       * model-selection package declares `@deepseek-ai/dsh-api-remotes` in
+       * dsh.client.inject for exactly this reason (it provides both `remote`
+       * and `remote.session`); package.json mirrors that here. */
+      inject: ['slots', 'modelDirectories', 'sessions', 'locale', 'remote', 'remote.session'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh, en }));
+
+        /* Agent Teams write verb (DSH >= 0.2.2). Resolved lazily instead of being
+         * added to this plugin's static `inject`: a missing dependency there
+         * would keep the whole plugin from activating on an older host, while
+         * `ctx.inject` simply never fires and the switch stays hidden. The
+         * static inject list is therefore unchanged — no package metadata and no
+         * activation contract is touched. */
+        let setTeamEnabled = null;
+        try {
+          if (typeof ctx.inject === 'function') {
+            ctx.inject(['remote', 'remote.agentTeams'], (scope) => {
+              setTeamEnabled = (sessionId, enabled) => scope.remote.agentTeams.setEnabled(sessionId, enabled);
+            });
+          }
+        } catch {
+          /* no such verb on this host: leave the switch out */
+        }
+
         ctx.slots.inject('conversation.input.model', () => ctx.slots.register({
           name: 'conversation.input.model',
           locale: NS,
-          /* DSH 0.2.1-rc.2: a seat entry also DECLARES its child slots, and the
-           * child exists only while the declaring entry is mounted. The shipped
-           * selector declares `conversation.input.model.label` here so plugins
-           * can decorate the model name; other shipped packages (the 1017 badge)
-           * register into it, and `slots.inject` parks a contributor until the
-           * slot is declared at all. Shadowing the parent seat and NOT declaring
-           * the child therefore drops those contributions silently, so we
-           * declare the same child with the same shape. Declaring it also makes
-           * the renderer hand this component a `renderSlot` binding (see the
-           * trigger), which is what keeps the decoration visible. */
-          children: {
-            'conversation.input.model.label': {
-              kind: 'single', scope: 'session', inline: true
-            }
-          },
-          /* `conversation.input.model` is a `kind: 'single'` slot that the shipped
-           * `@deepseek-ai/dsh-client-ui-model-selection` ModelSelect already
-           * occupies at priority 0. A `single` slot permits only ONE entry per
-           * priority and `register()` throws otherwise, so registering at 0
-           * would fail the whole plugin load. Shadowing is by design here: the
-           * projection keeps the lowest-priority entry of the cell, so -1 wins
-           * the seat and the shipped selector stays on the ledger untouched —
-           * uninstalling this plugin restores it with no residue. (0.2.1 also
-           * re-ranks dynamically loaded packages onto its own shadowing ladder,
-           * so an explicit -1 stays the right static-profile value without ever
-           * colliding with an auto-assigned rank.) */
+          /* Deliberately NO `children` here.
+           *
+           * Declaring `conversation.input.model.label` used to look necessary
+           * (the shipped 1017 badge registers into it), but in this host the
+           * shipped @deepseek-ai/dsh-client-ui-model-selection entry REMAINS
+           * MOUNTED even when our priority:-1 shadows it, and it declares the
+           * same child itself. SlotCore.register() rejects a child slot declared
+           * by two entries:
+           *
+           *   if (e.children) for (const h of Object.keys(e.children)) {
+           *     const m = this.records.get(h);
+           *     if (m?.spec) throw new Error(`slot "${h}" is already declared ...`);
+           *   }
+           *
+           * and that check runs BEFORE the entry is booked, so the whole
+           * register() throws and the seat is never created — the plugin looks
+           * installed but nothing renders. A try/catch fallback does NOT help:
+           * the plugin is an `immediately: true` dynamic entry, so it may
+           * register first and the shipped entry then throws the same error
+           * instead; the seat still never renders. The only correct move is to
+           * never declare the child.
+           *
+           * Cost: no `renderSlot` binding, so the trigger falls back to the
+           * catalog model name and loses the 1017 badge decoration. Both call
+           * sites already guard for a missing binding, so behaviour is intact. */
           priority: -1,
           inject(sessionId) {
             const directory = ctx.modelDirectories.directoryFor(sessionId);
@@ -1668,7 +1854,13 @@ body[data-ds-dark-theme] .${P}-root{
               sessionId,
               directory: directory.store,
               load: () => { if (available) directory.load().catch(() => {}); },
-              select: sel => (available ? directory.select(sel) : Promise.resolve(undefined))
+              select: sel => (available ? directory.select(sel) : Promise.resolve(undefined)),
+              /* Agent Teams: present only when the host exposed the verb. The
+               * switch itself is additionally gated on the `agentTeam`
+               * projection, which is what marks DSH >= 0.2.2. */
+              setTeamMode: enabled => (setTeamEnabled
+                ? setTeamEnabled(sessionId, enabled)
+                : Promise.resolve({ ok: false, error: { message: 'agentTeams unavailable' } }))
             };
           }
         }, Selector));
