@@ -22,6 +22,8 @@
 | 16 | 升级 0.2.1 后模型名上的「1017」徽标消失 | 子槽位 `conversation.input.model.label` 只在声明它的条目挂载期间存在 | `slots-integration.mjs` |
 | 17 | 拖动到一半「变成无法选中」 | 手势依赖指针捕获，捕获一丢就再也收不到 `pointermove`；旋钮可命中又让事件目标一直变 | `verify.mjs` |
 | 18 | 按住时的柔光环（按需求去掉） | 设计变更：按压只保留放大 | `verify.mjs` |
+| 19 | 点开模型选择器后**整块消失**，Console 报 `cannot get property "remote.session" without inject` | `inject` 少了 `remote` / `remote.session`；`directoryFor()` 内部读 `this.ctx.remote.session`，Cordis 按**调用方**的 inject 校验，于是席位每次渲染都抛错 | `slots-integration.mjs` |
+| 20 | **关掉插件后，消息栏里的模型选择器整个消失**（官方那颗也不回来） | 我们和官方都声明了同一个子槽 `conversation.input.model.label`；子槽声明是**独占**的，后注册者抛错 —— 我们抢先注册，**官方的注册被打掉**，于是席位只剩我们这一条；插件一关，座位就空了 | `seat-lifecycle.mjs` |
 
 ---
 
@@ -278,6 +280,206 @@ document 三个监听 + `blur` 兜底存在、`pointerId` 所有权判断存在�
 
 按住时的 `box-shadow` 必须与静止时**逐像素相同**（实测：两串计算值完全一致），
 且源码里不得再出现 `pressRing` 或按压态的 `box-shadow`。
+
+---
+
+## 第 19 条 · 点开模型选择器后整块消失
+
+### 现象
+
+模型选择器按钮**看得见**、样式正常、模型名和强度都在，但一点开（或任何一次交互后）整个弹层
+**什么都不出现**，看起来像「打开后自己消失了」。Console 里只有一行：
+
+```
+slot entry crashed in 'conversation.input.model':
+Error: cannot get property "remote.session" without inject
+```
+
+### 根因
+
+插件导出的 `inject` 只声明了四个服务：
+
+```js
+inject: ['slots', 'modelDirectories', 'sessions', 'locale']
+```
+
+但它渲染席位时调用的 `ctx.modelDirectories.directoryFor(sessionId)`，实现方是官方
+`@deepseek-ai/dsh-client-ui-model-selection` 的 `ModelDirectoryResolver`：
+
+```js
+static inject = ["sessions", "remote", "remote.session"];
+
+directoryFor(sessionId) {
+  ...
+  const directory = new ModelDirectory(this.ctx.remote.session, ...);
+}
+```
+
+关键在于 **Cordis 校验的是「谁在访问」的 ctx，不是「谁提供」的 static inject**。
+`this.ctx` 是被调用时绑定的调用方上下文，所以从本插件里访问 `remote.session`
+必须由本插件自己声明。少声明 → 每次 `directoryFor()` 都抛。
+
+而这个调用发生在席位条目的 `inject(sessionId)` 里，**即每次渲染 composer 都会执行**。
+Cordis 捕获后只打一行 `slot entry crashed`：
+不打到 UI、不写日志、不影响其他插件，只是让**这一条席位**静默变空。
+所以从用户视角看，是「控件在、一用就没了」，很容易被误判成样式/透明度问题
+（曾一度被归因为主题插件的 `opacity`，见 `HANDOVER.md` 的历史误判）。
+
+### 修法
+
+补齐 `remote` 与 `remote.session`，与官方声明保持一致：
+
+```js
+inject: ['slots', 'modelDirectories', 'sessions', 'locale', 'remote', 'remote.session'],
+```
+
+同一类的隐式依赖还有一个：子槽位 `conversation.input.model.label` 必须在注册时声明
+（第 16 条）。两者的共同点是 —— **官方条目声明了什么，遮蔽它的条目就得声明什么**，
+否则失败是静默的。
+
+### 断言
+
+`test/slots-integration.mjs` **从 asar 里读出官方插件的 inject 列表**，再断言本插件
+覆盖了其中的每一个服务：
+
+```js
+check('OUR inject list covers every service the shipped resolver reaches for', () => {
+  const theirs = officialInjectList();
+  const ours = ourInjectList();
+  for (const service of ['remote', 'remote.session']) {
+    assert.ok(theirs.includes(service), `sanity: shipped injects ${service}`);
+    assert.ok(ours.includes(service), 'or directoryFor() throws on every render');
+  }
+  for (const service of ['slots', 'modelDirectories', 'sessions', 'locale']) {
+    assert.ok(ours.includes(service));
+  }
+});
+```
+
+不硬编码一份字符串，是因为硬编码只能证明「我当时写对了」，读官方源码才能证明
+「官方换实现时我会先知道」。
+
+真实实例复测（`--remote-debugging-port=9222` + CDP）：
+
+| 项目 | 修复前 | 修复后 |
+|---|---|---|
+| `[class*=cmes]` 元素数 | 0 | 82 |
+| 弹层 | 不存在 | `visible` / `opacity:1` / 272×104 |
+| 停留 3 秒 | — | 仍 `visible` |
+| 模型列表面板 | — | 高 255px，5 个 provider |
+| 再次点击 | — | `closed`，恢复 104px |
+
+---
+
+## 第 20 条 · 关掉插件后模型选择器从消息栏整个消失
+
+### 现象
+
+插件开着时一切正常。**把插件关掉**，消息栏（composer bar）里的模型选择器
+**整个不见了** —— 官方的模型选择器也没有回来，座位上什么都不剩。
+
+这不是「第 16 条那个徽标不见了」那种装饰性缺失，而是**功能性损坏**：
+用户在关掉插件之后，**没有模型选择器可用**。
+
+### 根因
+
+第 16 条和第 19 条都是真问题，但它们合起来把插件推进了一个**死结**。
+第 20 条的根因是这两条修法的**副作用**，而副作用的机制在注册表里：
+
+**子槽位声明是独占的。** 真实 `SlotCore.register`（随包发布，见下面的断言）：
+
+```js
+if (e.children) for (const h of Object.keys(e.children)) {
+  const m = this.records.get(h);
+  if (m?.spec) throw new Error(`slot "${h}" is already declared (by ${m.declaredBy})`)
+}
+```
+
+**同一个子槽只能有一个条目声明它，谁后注册谁抛错。**
+
+而座位槽 `conversation.input.model` 的子槽 `conversation.input.model.label`
+**官方那条也声明了**（`dsh-client-ui-model-selection` 的注册形状里带着
+`children: { "conversation.input.model.label": {...} }`）。
+
+第 16 条告诉我们「不声明这个子槽 → 徽标会被静默丢掉」，于是我们**也声明了它**。
+本包是 `immediately: true` 的动态 bundle，**我们先注册**，官方那条后注册 →
+**抛错 → 从来没有进过 ledger**。
+
+于是座位上一直只有我们这一条。插件一关，我们这条被 dispose，
+座位**一条注册都不剩** → 模型选择器从消息栏彻底消失；
+官方那颗想回来也回不来，因为它**从来没注册成功过**。
+
+用**随包发布的真实 `SlotCore`** 复现（`test/seat-lifecycle.mjs`）：
+
+```
+我们先注册（priority -1）:
+  winners 1 -> our Selector
+官方尝试注册:
+  THREW: slot "conversation.input.model.label" is already declared
+>>> 关掉我们的插件 <<<
+  winners 0   <-- NOTHING RENDERS
+```
+
+### 修法
+
+**我们不再声明这个子槽，也不再调用 `renderSlot` 去渲染它。**
+
+子槽 `conversation.input.model.label` 的**所有者**是官方那条 entry ——
+它声明的，由它的 `renderSlot` 调用触发的。我们要的是**替换座位上那颗按钮**，
+不是**接管这个子槽的声明**。
+
+渲染器的规则印证了这一点（`dsh-client-ui-renderer`）：
+
+```js
+if (entry.children !== void 0) {
+  kit["renderSlot"] = boundRenderSlot(host, entry);   // ← 只有声明了 children 才有
+  …
+}
+```
+
+```js
+binding = (key, owner, opts) => {
+  const declared = entry.children?.[key];
+  if (declared === void 0) throw new SlotOwnershipError(…)   // ← 只认自己声明过的键
+  …
+}
+```
+
+也就是说：**没有 `children`，就没有 `renderSlot`**；而 `renderSlot` 也只认
+**自己那条 entry 声明过的**子键。我们不拥有这个子槽，两样都不该碰。
+
+具体改动：
+
+1. 注册里**去掉 `children`** → 官方那条能正常注册，座位 ledger 上永远有两条
+   （我们 -1、官方 0），关掉我们官方那条立刻接管；
+2. 组件里**去掉 `renderSlot('conversation.input.model.label', …)`**（触发器
+   与模型行各一处），直接渲染目录里的模型名；
+3. `Selector` 的参数里**去掉 `renderSlot`** —— 没有 `children` 的条目，
+   渲染器根本不会装配这个 prop。
+
+**代价**：官方那个「1017」徽标（装饰模型名的）在本插件占用座位期间**不再显示**。
+徽标是装饰，模型选择器是功能 —— 功能优先。这个取舍是**唯一**能同时满足
+「插件可用」和「关掉插件后官方选择器能回来」的选择。
+
+### 断言
+
+`test/seat-lifecycle.mjs` **从 asar 里把真实 `SlotCore` 抽出来跑**（不是仿写），
+复刻整条生命周期：
+
+- 我们的注册**不声明**任何子槽；
+- 官方那条注册**必须成功**（不抛错），座位 ledger 上有两条；
+- **关掉我们之后，座位 winners 必须是 1，且渲染的是官方那颗**；
+- **对照组**：用旧的（声明子槽的）形状跑一遍，官方注册**必须抛错**、
+  关掉我们之后座位**必须为空** —— 没有这一条，测试无法区分
+  「修好了」和「根本没走到那条路径」；
+- 组件里**不得出现 `renderSlot(` 调用**，`Selector` 的参数里**不得有 `renderSlot`**。
+
+`test/slots-integration.mjs` 另外对着**官方源码**核对：
+官方声明了哪些子槽，我们就**一个都不能声明**、**一个都不能渲染**。
+
+> 第 16 条（徽标）因此**被第 20 条推翻**：徽标不是「声明了子槽就能显示」，
+> 而是「**官方那条 entry** 在渲染时才会画出来」。想显示它就得抢声明，
+> 而抢声明就等于把官方那条打死。这不是可以两头都要的局面。
 
 ---
 

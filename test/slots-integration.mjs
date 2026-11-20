@@ -147,12 +147,26 @@ const check = (name, fn) => {
 const skip = (name, why) => results.push(['skip', `${name} — ${why}`]);
 
 /* ---------------------------------------------------------------------------
- * 1. Child-slot parity with the shipped seat entry.
+ * 1. Child-slot OWNERSHIP with the shipped seat entry.
  *
  * Both sides are read out of the shipped/official source and out of our own
  * client.js, so neither can drift silently.
+ *
+ * The contract is INVERTED relative to what an earlier version of this plugin
+ * assumed: a child slot may be declared by exactly ONE entry, and the shipped
+ * `@deepseek-ai/dsh-client-ui-model-selection` declares
+ * `conversation.input.model.label`. We must therefore NOT declare it — doing
+ * so makes the shipped registration throw, and the model selector then
+ * disappears from the composer the moment this plugin is switched off
+ * (incident 20; see test/seat-lifecycle.mjs for the replay against the real
+ * shipped registry).
  * ------------------------------------------------------------------------- */
 const OUR_CLIENT = readFileSync(join(HERE, '..', 'client.js'), 'utf8');
+
+/** The source with comments stripped — assertions below are about code. */
+const OUR_CODE = OUR_CLIENT
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 check('the shipped model-selection package is present', () => {
   assert.ok(MODEL_SELECTION, 'client-ui-model-selection/lib/client.js found in the asar');
@@ -172,13 +186,13 @@ if (MODEL_SELECTION) {
     return [...m[1].matchAll(/"([a-z0-9.\-]+)":\s*\{/gi)].map((x) => x[1]);
   }
 
+  /** The child slots OUR entry declares — must be none. */
   function ourChildrenKeys() {
-    const at = OUR_CLIENT.indexOf("name: 'conversation.input.model'");
+    const at = OUR_CODE.indexOf("name: 'conversation.input.model'");
     assert.ok(at > -1, 'our entry registers conversation.input.model');
-    const tail = OUR_CLIENT.slice(at, at + 1400);
-    const m = tail.match(/children:\s*\{([\s\S]*?)\n\s*\},\n\s*\/\*/);
-    assert.ok(m, 'our entry declares a children table');
-    return [...m[1].matchAll(/'([a-z0-9.\-]+)':\s*\{/gi)].map((x) => x[1]);
+    const tail = OUR_CODE.slice(at, at + 1400);
+    const m = tail.match(/children:\s*\{([\s\S]*?)\n\s*\},/);
+    return m ? [...m[1].matchAll(/'([a-z0-9.\-]+)':\s*\{/gi)].map((x) => x[1]) : [];
   }
 
   const theirs = officialChildrenKeys();
@@ -189,37 +203,71 @@ if (MODEL_SELECTION) {
       `shipped children: ${JSON.stringify(theirs)}`);
   });
 
-  check('OUR entry declares the SAME child slots as the shipped entry', () => {
-    assert.deepEqual(ours.slice().sort(), theirs.slice().sort(),
-      'a missing child slot silently disables every contributor to it');
+  check('OUR entry declares NO child slot of its own', () => {
+    // The registry throws `slot "..." is already declared` for the second
+    // declarer of a child slot. The shipped entry owns
+    // `conversation.input.model.label`; claiming it too breaks the shipped
+    // registration and empties the seat on uninstall.
+    assert.deepEqual(ours, [],
+      `our entry must not declare child slots, found ${JSON.stringify(ours)}`);
   });
 
-  check('our child specs keep kind/scope/inline compatible with the shipped one', () => {
-    // the shipped child is a session-scoped inline single slot; anything else
-    // would change how contributors mount
-    const m = OUR_CLIENT.match(/'conversation\.input\.model\.label':\s*\{([\s\S]*?)\}/);
-    assert.ok(m, 'child spec found');
-    assert.match(m[1], /kind:\s*'single'/, 'kind single');
-    assert.match(m[1], /scope:\s*'session'/, 'scope session');
-    assert.match(m[1], /inline:\s*true/, 'inline');
+  check('our component never renders a child slot we do not own', () => {
+    // `renderSlot` is only legal for keys in the entry's own children table,
+    // and the renderer only builds the binding for an entry that declares
+    // children at all.
+    for (const key of theirs) {
+      assert.doesNotMatch(OUR_CODE, new RegExp(`renderSlot\\('${key.replace(/\./g, '\\.')}'`),
+        `we must not render '${key}' — it belongs to the shipped entry`);
+    }
   });
 
-  check('the component renders the label child slot with a fallback', () => {
-    // Declaring the child without rendering it would leave the badge invisible,
-    // so the render path must call renderSlot('conversation.input.model.label').
-    assert.match(OUR_CLIENT, /renderSlot\('conversation\.input\.model\.label'/,
-      'renderSlot is called for the label child');
-    assert.match(OUR_CLIENT, /\{\s*fallback:\s*modelName\s*\}/,
-      'the catalog name is the fallback');
-    assert.match(OUR_CLIENT, /placement:\s*'trigger'/, 'trigger placement');
-    assert.match(OUR_CLIENT, /placement:\s*'option'/, 'option placement');
+  check('the seat still shows the catalog model name', () => {
+    // without the child slot, the plain name is what the seat renders
+    assert.match(OUR_CODE, /className: `\$\{P\}-caption`\s*\}\s*,\s*modelName\)/s,
+      'the trigger renders the catalog model name');
+    assert.match(OUR_CODE, /className: `\$\{P\}-modelName`\s*\}\s*,\s*h\('span', null, m\.name \|\| m\.id\)/s,
+      'the model row renders the catalog model name');
   });
 
-  check('the component tolerates a host that has no child slots (0.2.0)', () => {
-    // renderSlot only exists when children are declared; the plain name must
-    // still render, so the call has to be guarded
-    assert.match(OUR_CLIENT, /renderSlot\s*\n?\s*\?/,
-      'renderSlot usage is conditional');
+  /* THE SEAT INJECT CONTRACT.
+   *
+   * `ctx.modelDirectories.directoryFor(id)` is implemented by the shipped
+   * `ModelDirectoryResolver`, and its own `directoryFor()` reads
+   * `this.ctx.remote.session`. Cordis checks that read against the CALLER's
+   * inject list, so a plugin that only injects `modelDirectories` still throws:
+   *
+   *   cannot get property "remote.session" without inject
+   *
+   * The throw happens inside the seat's `inject(sessionId)`, i.e. on every
+   * render, which takes the whole entry down and makes the selector vanish the
+   * moment it is used. Mirroring the shipped plugin's service list is therefore
+   * part of the seat contract, not a nicety. */
+  function officialInjectList() {
+    const m = official.match(/\n\t*const inject = \[([\s\S]*?)\];/);
+    assert.ok(m, 'the shipped plugin declares its inject list');
+    return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+  }
+
+  function ourInjectList() {
+    const m = OUR_CLIENT.match(/inject:\s*\[([^\]]*)\],\s*\n\s*apply\(ctx\)/);
+    assert.ok(m, 'our plugin declares its inject list');
+    return [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  }
+
+  check('OUR inject list covers every service the shipped resolver reaches for', () => {
+    const theirs = officialInjectList();
+    const ours = ourInjectList();
+    // everything the shipped seat needs from the resolver must be injected here
+    for (const service of ['remote', 'remote.session']) {
+      assert.ok(theirs.includes(service), `sanity: shipped injects ${service}`);
+      assert.ok(ours.includes(service),
+        `our plugin must inject ${service} or directoryFor() throws on every render`);
+    }
+    // and the services the seat needs for its own work
+    for (const service of ['slots', 'modelDirectories', 'sessions', 'locale']) {
+      assert.ok(ours.includes(service), `our plugin must inject ${service}`);
+    }
   });
 }
 

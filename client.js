@@ -1505,16 +1505,12 @@ body[data-ds-dark-theme] .${P}-root{
           onClick: () => chooseModel(activeProvider.id, m)
         },
           h('span', { className: `${P}-modelName` },
-            /* the same label child slot, in its `option` placement, so a
-             * decoration that exists in the shipped list also shows here
-             * (catalog name is the fallback) */
-            h('span', null,
-              renderSlot
-                ? renderSlot('conversation.input.model.label', {
-                    provider: { id: activeProvider.id, name: activeProvider.name },
-                    model: m, placement: 'option', selected
-                  }, { fallback: m.name || m.id })
-                : (m.name || m.id)),
+            /* The catalog model name, rendered directly. We do NOT route this
+             * through `renderSlot('conversation.input.model.label', …)`: that
+             * child slot is declared by the shipped model-selection entry, and
+             * claiming it here is what made the official selector disappear
+             * when this plugin was switched off (incident 20). */
+            h('span', null, m.name || m.id),
             h('span', { className: `${P}-cnt` }, levelCount ? `${levelCount} 档` : '不支持')),
           icon('check', `${P}-ck`));
       });
@@ -1725,20 +1721,17 @@ body[data-ds-dark-theme] .${P}-root{
            * read. `--dsh-composer-model-text-display` still hides both together
            * in the host's icon-only compact mode. */
           h('span', { className: `${P}-caption` },
-            /* DSH 0.2.1-rc.2 gives the seat a child slot,
-             * `conversation.input.model.label`, for inline label decoration
-             * (the shipped 1017 badge registers into it). Shadowing the parent
-             * seat without declaring that child would make the extension's
-             * `slots.inject` wait forever and the badge would silently vanish,
-             * so we declare it in the registration and render it here, with the
-             * catalog name as the fallback. `renderSlot` only exists when the
-             * entry declares children, so 0.2.0 hosts keep the plain name. */
-            model && renderSlot
-              ? renderSlot('conversation.input.model.label', {
-                  provider: { id: group?.id, name: group?.name },
-                  model, placement: 'trigger', selected: true
-                }, { fallback: modelName })
-              : modelName),
+            /* The catalog model name, rendered directly.
+             *
+             * This used to go through `renderSlot('conversation.input.model.label', …)`
+             * so the shipped "1017" badge would decorate it. That child slot is
+             * declared by the SHIPPED model-selection entry, and a child slot may
+             * be declared by only ONE entry — declaring it here as well is what
+             * threw the official registration away and made the model selector
+             * vanish from the composer when this plugin was switched off
+             * (incident 20). The badge is decoration; the selector itself is
+             * the feature, so the selector wins. */
+            modelName),
           triggerLabel
             ? h('span', { className: `${P}-triggerEffort` }, triggerLabel)
             : null,
@@ -1784,16 +1777,22 @@ body[data-ds-dark-theme] .${P}-root{
      * Plugin
      * ================================================================== */
     return {
-      /* ModelDirectoryResolver (ctx.modelDirectories) is a cordis Service whose
-       * own fiber declares
-       *   static inject = ['sessions', 'remote', 'remote.session'];
-       * A caller re-entering the service through the proxy runs on the CALLER's
-       * fiber, so this plugin must inject the same names. Without them the
-       * first directoryFor() throws "cannot get property \"remote.session\"
-       * without inject" and the seat crashes at render time. The shipped
-       * model-selection package declares `@deepseek-ai/dsh-api-remotes` in
-       * dsh.client.inject for exactly this reason (it provides both `remote`
-       * and `remote.session`); package.json mirrors that here. */
+      /* `remote` / `remote.session` are NOT optional here, and they are not
+       * "already provided by modelDirectories".
+       *
+       * `ctx.modelDirectories.directoryFor(sessionId)` is implemented by the
+       * shipped `ModelDirectoryResolver`, whose `directoryFor()` reaches for
+       * `this.ctx.remote.session`. Cordis validates that access against the
+       * CALLER's inject list, not the service's own — so calling directoryFor()
+       * from a plugin that has not itself injected `remote.session` throws:
+       *
+       *   slot entry crashed in 'conversation.input.model':
+       *   Error: cannot get property "remote.session" without inject
+       *
+       * The throw happens inside the seat's `inject(sessionId)`, i.e. on every
+       * render of the composer seat, which takes the entry down and leaves the
+       * popover unopenable. The shipped selector declares exactly these two, so
+       * we mirror its contract. */
       inject: ['slots', 'modelDirectories', 'sessions', 'locale', 'remote', 'remote.session'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh, en }));
@@ -1843,6 +1842,34 @@ body[data-ds-dark-theme] .${P}-root{
            * Cost: no `renderSlot` binding, so the trigger falls back to the
            * catalog model name and loses the 1017 badge decoration. Both call
            * sites already guard for a missing binding, so behaviour is intact. */
+          /* NO `children` HERE — AND THAT IS DELIBERATE. See incident 20.
+           *
+           * `conversation.input.model.label` is a CHILD SLOT, and a child slot
+           * may be declared by exactly ONE entry: the registry throws
+           * `slot "..." is already declared (by ...)` for the second declarer
+           * (SlotCore.register, shipped in dsh-web-frontend's bundle).
+           *
+           * The shipped `@deepseek-ai/dsh-client-ui-model-selection` declares
+           * that child. So does this plugin — and whoever registers SECOND
+           * throws. We register first (this package is a dynamic bundle with
+           * `immediately: true`), which means the SHIPPED entry's registration
+           * threw and it never reached the ledger. The seat was therefore held
+           * by this plugin alone, and when the plugin was switched off the
+           * seat became EMPTY: the model selector vanished from the composer
+           * and the official one could not come back, because it had never
+           * been registered in the first place.
+           *
+           * Declaring the child is also what made the renderer hand us a
+           * `renderSlot` binding (the renderer only builds it when the entry
+           * declares children, and it authorizes only keys in THIS entry's own
+           * children table). We do not own that child — the shipped entry owns
+           * it — so we must not declare it, and we must not call `renderSlot`
+           * for it. We render the catalog model name directly instead.
+           *
+           * The cost is the shipped "1017" badge, which decorates the model
+           * name: while this plugin holds the seat, the badge is not drawn.
+           * That is a cosmetic loss, and it is the only outcome that keeps the
+           * official selector alive across an uninstall. */
           priority: -1,
           inject(sessionId) {
             const directory = ctx.modelDirectories.directoryFor(sessionId);

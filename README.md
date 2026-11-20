@@ -6,7 +6,7 @@
 
 ![version](https://img.shields.io/badge/version-1.1.2-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-110%20passing-brightgreen?style=flat-square)
+![tests](https://img.shields.io/badge/tests-120%20passing-brightgreen?style=flat-square)
 ![dsh](https://img.shields.io/badge/DSH-0.2.1--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 
@@ -220,9 +220,12 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 
 - **需要重启** DSH Desktop 才生效（客户端 bundle 在启动时注入）
 - **依赖官方 slot 契约**：官方若改动 `conversation.input.model` 的形状，本插件会**静默退回**「什么都不做」，不会破坏官方界面
-- **0.2.1 起席位要声明子槽位**：`conversation.input.model.label` 只在**声明它的条目挂载期间**存在，
-  官方模型列表与「1017」徽标都往它注册。本插件遮蔽席位时**同样声明并渲染**该子槽位，
-  否则那些装饰会在无报错的情况下消失
+- **子槽位声明是独占的，插件不去抢**：`conversation.input.model.label` 只在**声明它的条目挂载期间**存在，
+  而**官方那条席位也在声明它** —— 注册表对第二个声明者直接抛
+  `slot "..." is already declared`。本插件**不声明、不渲染**这个子槽位：
+  抢声明会把官方的注册打掉，**插件一关，消息栏里的模型选择器就整个消失**（官方那颗回不来，
+  因为它从来没注册成功过）。代价是官方那个装饰模型名的「1017」徽标在本插件占用座位期间不显示 ——
+  徽标是装饰，模型选择器是功能，详见 [docs/INCIDENTS.md 第 20 条](docs/INCIDENTS.md)
 - **官方模型菜单没有入口了**：那颗席按钮是官方菜单的唯一入口，被遮蔽后打不开；切模型仍有本插件面板与官方 **`/model` 命令**两条路
 - **档位由模型决定**：滑条只显示当前模型实际公布的推理强度；模型没有推理元数据时显示「此模型未提供推理强度」
 - **Ultra 命名**：`max` 档在 Codex 里叫 Ultra，本插件沿用该命名；若某模型把最高档命名为别的 id，则显示模型自己的名字
@@ -238,7 +241,7 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 # 语法检查
 node --check client.js
 
-# 离线断言套件（43 项：加载 / 注册契约 / 遮蔽 / 几何 / 配色 / 主题接线 / fail-open / 无障碍 / 两级下钻 / 悬浮窗 / 绽放 / 形变 / 抓手 / 0.2.1 子槽位）
+# 离线断言套件（47 项：加载 / 注册契约 / 遮蔽 / 几何 / 配色 / 主题接线 / fail-open / 无障碍 / 两级下钻 / 悬浮窗 / 绽放 / 形变 / 抓手 / 0.2.1 子槽位归属）
 node test/verify.mjs
 
 # 配色断言（24 项：浅色 + 深色各过一遍三条 WCAG 下限 + 色相单调 + 色度 + 去重）
@@ -247,11 +250,14 @@ node test/palette.mjs
 # 折叠 bug 回归（6 项：同时跑有 bug 与修好后的两个状态机）
 node test/collapse-regression.mjs
 
-# 对着真实 DSH 的集成测试（9 项；0.2.1 对着随包源码断言子槽位契约，找不到 DSH 安装时自动跳过）
-node test/slots-integration.mjs
+# 席位生命周期回归（8 项：用**随包发布的真实 SlotCore** 复刻「装载 → 遮蔽 → 关掉插件」）
+node test/seat-lifecycle.mjs
 # 自定义 DSH 安装位置：设置 DSH_ASAR 或 DSH_RESOURCES 环境变量
 
-# 编码守卫（23 项：所有文本文件必须是无 BOM 的干净 UTF-8）
+# 对着真实 DSH 的集成测试（9 项；0.2.1 对着随包源码断言子槽位契约，找不到 DSH 安装时自动跳过）
+node test/slots-integration.mjs
+
+# 编码守卫（26 项：所有文本文件必须是无 BOM 的干净 UTF-8）
 node test/encoding.mjs
 
 # 重新生成 README 截图（从 client.js 抽取真实 CSS；需要 Edge/Chrome）
@@ -269,6 +275,7 @@ node test/make-dark-shot.mjs   # 输出 docs/images/dark-mode.png
 - `test/verify.mjs` 会**真正执行** `client.js`，捕获它注册的 slot，并断言注册形状与官方文档一致
 - `test/palette.mjs` 从源码里**读出**真实色值再算对比度，色值一改就会重新校验
 - `test/collapse-regression.mjs` 把**有 bug 的状态机**也实现了一遍：先证明它确实会「一次全开」，再证明修好后的版本不会 —— 回归测试不该只测好版本
+- `test/seat-lifecycle.mjs` 从 `app.asar` 里**解包出随包发布的真实 `SlotCore`**，复刻整条席位生命周期：官方那条必须注册成功、关掉插件后官方那颗必须接管；另有一条**对照组**用旧的（有缺陷的）形状跑一遍，证明那条失败路径确实会被捕获
 - `test/slots-integration.mjs` 从 `app.asar` 里**解包出真实的 SlotCore**，用本插件真实的注册定义驱动它，端到端验证遮蔽与卸载恢复
 
 ---

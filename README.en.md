@@ -7,7 +7,7 @@
 
 ![version](https://img.shields.io/badge/version-1.1.2-blue?style=flat-square)
 ![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-![tests](https://img.shields.io/badge/tests-110%20passing-brightgreen?style=flat-square)
+![tests](https://img.shields.io/badge/tests-120%20passing-brightgreen?style=flat-square)
 ![dsh](https://img.shields.io/badge/DSH-0.2.1--rc.2-5b6ef5?style=flat-square)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square)
 
@@ -242,6 +242,17 @@ dsh plugin --profile desktop list | Select-String codex-model-effort
 - **Depends on the official slot contract**: if the official
   `conversation.input.model` shape changes, this plugin **silently falls back to doing
   nothing** rather than breaking the official UI
+- **Child-slot declarations are exclusive, and this plugin does not compete for them**:
+  `conversation.input.model.label` exists only while the entry that **declares** it is
+  mounted — and the **official** seat entry declares it too. The registry throws
+  `slot "..." is already declared` for the second declarer. This plugin therefore declares
+  and renders **neither** that child slot nor anything else: claiming it throws the
+  official registration away, and then **switching this plugin off empties the seat**, so
+  the model selector vanishes from the composer and the official one cannot come back
+  (it had never registered in the first place). The cost is that the official "1017"
+  badge, which decorates the model name, is not drawn while this plugin holds the seat —
+  the badge is decoration, the selector is the feature. See
+  [docs/INCIDENTS.md, incident 20](docs/INCIDENTS.md)
 - **The official model menu loses its entry point**: that seat was the only entry to the
   official menu; switching models still works through this plugin's pane and the official
   **`/model` command**
@@ -263,8 +274,9 @@ The package itself is **dependency-free** — no `npm install` needed:
 # syntax check
 node --check client.js
 
-# offline assertion suite (35: loading / registration contract / shadowing / geometry /
-# palette / theme wiring / fail-open / accessibility / two-level drill-down)
+# offline assertion suite (47: loading / registration contract / shadowing / geometry /
+# palette / theme wiring / fail-open / accessibility / two-level drill-down /
+# child-slot ownership)
 node test/verify.mjs
 
 # palette assertions (24: the three WCAG floors for BOTH themes + monotonic hue +
@@ -274,11 +286,15 @@ node test/palette.mjs
 # collapse-bug regression (6: runs BOTH the buggy and the fixed state machine)
 node test/collapse-regression.mjs
 
-# integration against the REAL SlotCore (4; auto-skips when DSH is not installed)
-node test/slots-integration.mjs
+# seat-lifecycle regression (8: replays load -> shadow -> "switch the plugin off"
+# against the REAL shipped SlotCore)
+node test/seat-lifecycle.mjs
 # point it at a custom install with the DSH_ASAR or DSH_RESOURCES env var
 
-# encoding guard (23: every text file must be clean, BOM-free UTF-8)
+# integration against the REAL SlotCore (9; auto-skips when DSH is not installed)
+node test/slots-integration.mjs
+
+# encoding guard (26: every text file must be clean, BOM-free UTF-8)
 node test/encoding.mjs
 
 # regenerate the README screenshots (extracts the real CSS from client.js; needs Edge/Chrome)
@@ -300,6 +316,10 @@ A few deliberate choices in the test bench:
 - `test/collapse-regression.mjs` implements the **buggy** state machine too: it first proves
   that version really does expand everything on one click, then proves the fixed one does
   not — a regression test should not only test the good version
+- `test/seat-lifecycle.mjs` **unpacks the real shipped `SlotCore`** out of `app.asar` and
+  replays the whole seat lifecycle: the official entry must register successfully, and
+  switching this plugin off must hand the seat back to it. A **control case** replays the
+  old (buggy) shape to prove that failure path is really being caught
 - `test/slots-integration.mjs` **unpacks the real SlotCore** out of `app.asar`, drives it with
   this plugin's real registration, and end-to-end verifies shadowing and uninstall recovery
 

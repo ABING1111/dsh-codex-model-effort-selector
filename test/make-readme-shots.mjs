@@ -278,7 +278,7 @@ shots.push({
     <div style="margin-top:12px;font-size:38px;font-weight:650;letter-spacing:-.01em;color:#0f1116">
       把 Codex 的模型选择器，搬进 DSH 输入框
     </div>
-    <div style="margin-top:10px;font-size:15px;color:#5b6270">一个入口 · 两块面板 · 逐像素复刻的推理强度滑条</div>
+    <div style="margin-top:10px;font-size:15px;color:#5b6270">想得更深，选得更准 · 逐像素复刻的推理强度滑条</div>
   </div>
 
   <div style="position:absolute;left:0;right:0;top:250px;display:flex;gap:34px;align-items:flex-start;justify-content:center">
